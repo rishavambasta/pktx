@@ -54,15 +54,19 @@ static bool init_npcap(void) {
     if (npcap_attempted) return npcap_available;
     npcap_attempted = true;
 
+    // Set DLL search path to System32\Npcap so wpcap.dll and Packet.dll are found
+    char npcap_dir[MAX_PATH];
+    if (GetSystemDirectoryA(npcap_dir, sizeof(npcap_dir))) {
+        strncat(npcap_dir, "\\Npcap", sizeof(npcap_dir) - strlen(npcap_dir) - 1);
+        SetDllDirectoryA(npcap_dir);
+    }
+
     // Load Npcap / WinPcap wpcap.dll dynamically
     h_wpcap = LoadLibraryA("wpcap.dll");
-    if (!h_wpcap) {
-        // Try Npcap System directory fallback
-        char npcap_dir[MAX_PATH];
-        if (GetSystemDirectoryA(npcap_dir, sizeof(npcap_dir))) {
-            strncat(npcap_dir, "\\Npcap\\wpcap.dll", sizeof(npcap_dir) - strlen(npcap_dir) - 1);
-            h_wpcap = LoadLibraryA(npcap_dir);
-        }
+    if (!h_wpcap && npcap_dir[0] != '\0') {
+        char full_wpcap_path[512];
+        snprintf(full_wpcap_path, sizeof(full_wpcap_path), "%s\\wpcap.dll", npcap_dir);
+        h_wpcap = LoadLibraryA(full_wpcap_path);
     }
 
     if (h_wpcap) {
