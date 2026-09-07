@@ -9,8 +9,8 @@
 #define MAX_IF_ENTRIES 32
 
 typedef struct {
-    char name[32];
-    char description[128];
+    char name[256];
+    char description[256];
 } if_info_t;
 
 typedef struct {
@@ -19,7 +19,7 @@ typedef struct {
 } if_list_t;
 
 typedef struct {
-    char interface_name[32]; // e.g. "eth0", "wlan0", "lo"
+    char interface_name[256]; // e.g. "eth0", "wlan0", "\Device\NPF_{...}"
     uint32_t count;          // Repetitions per packet entry (0 = loop indefinitely)
     uint32_t delay_ms;       // IPG / delay between packets in ms (0 = minimal IPG)
     bool dry_run;            // If true, simulate transmission without sending to raw socket

@@ -134,7 +134,7 @@ static void prompt_transmission(strm_stream_t *stream) {
         uint32_t if_idx = prompt_uint(prompt_lbl, 1, 1, (uint32_t)if_list.count);
         strncpy(tx_opts.interface_name, if_list.interfaces[if_idx - 1].name, sizeof(tx_opts.interface_name) - 1);
     } else {
-        char if_input[32];
+        char if_input[256];
         prompt_string("Enter target network interface name", tx_opts.interface_name, if_input, sizeof(if_input));
         strncpy(tx_opts.interface_name, if_input, sizeof(tx_opts.interface_name) - 1);
     }
@@ -513,7 +513,7 @@ int cli_run_args(int argc, char *argv[]) {
     char save_path[256] = "";
     char load_path[256] = "";
     char pcap_path[256] = "";
-    char tx_ifname[32] = "";
+    char tx_ifname[256] = "";
     uint32_t count = 1;
     uint32_t delay_ms = 0;
     bool dry_run = false;

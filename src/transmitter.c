@@ -135,8 +135,8 @@ size_t get_network_interfaces(if_list_t *list) {
 
         if (pAddresses && GetAdaptersAddresses(AF_UNSPEC, flags, NULL, pAddresses, &outBufLen) == NO_ERROR) {
             for (IP_ADAPTER_ADDRESSES *pCurr = pAddresses; pCurr && list->count < MAX_IF_ENTRIES; pCurr = pCurr->Next) {
-                char name[32];
-                char desc[128];
+                char name[256];
+                char desc[256];
                 snprintf(name, sizeof(name), "%ls", pCurr->FriendlyName ? pCurr->FriendlyName : L"Adapter");
                 snprintf(desc, sizeof(desc), "%s", pCurr->AdapterName ? pCurr->AdapterName : "");
 
