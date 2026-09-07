@@ -31,6 +31,7 @@ void ipv4_config_set_defaults(ipv4_config_t *cfg) {
 
     cfg->total_length = 64; // Default min size
     cfg->payload_type = PAYLOAD_ALL_ZEROS;
+    cfg->payload_file_path[0] = '\0';
 }
 
 size_t build_ipv4_packet(const ipv4_config_t *cfg, uint8_t *buffer, size_t max_buf_len) {
@@ -48,6 +49,8 @@ size_t build_ipv4_packet(const ipv4_config_t *cfg, uint8_t *buffer, size_t max_b
     eth_cfg.ethertype = ETHER_TYPE_IPV4;
     eth_cfg.total_length = total_pkt_len;
     eth_cfg.payload_type = cfg->payload_type;
+    strncpy(eth_cfg.payload_file_path, cfg->payload_file_path, sizeof(eth_cfg.payload_file_path) - 1);
+    eth_cfg.payload_file_path[sizeof(eth_cfg.payload_file_path) - 1] = '\0';
 
     // First build L2 frame shell
     if (build_ethernet_packet(&eth_cfg, buffer, max_buf_len) == 0) return 0;
@@ -81,7 +84,7 @@ size_t build_ipv4_packet(const ipv4_config_t *cfg, uint8_t *buffer, size_t max_b
     // 3. Fill IPv4 payload
     size_t ip_payload_len = ip_total_len - IPV4_HDR_LEN;
     uint8_t *ip_payload_ptr = buffer + ETHER_HDR_LEN + IPV4_HDR_LEN;
-    generate_payload(ip_payload_ptr, ip_payload_len, cfg->payload_type);
+    generate_payload_ext(ip_payload_ptr, ip_payload_len, cfg->payload_type, cfg->payload_file_path);
 
     return total_pkt_len;
 }

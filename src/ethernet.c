@@ -18,6 +18,7 @@ void eth_config_set_defaults(eth_config_t *cfg) {
     cfg->ethertype = ETHER_TYPE_IPV4;
     cfg->total_length = 64; // Default min size
     cfg->payload_type = PAYLOAD_ALL_ZEROS;
+    cfg->payload_file_path[0] = '\0';
 }
 
 size_t build_ethernet_packet(const eth_config_t *cfg, uint8_t *buffer, size_t max_buf_len) {
@@ -35,7 +36,7 @@ size_t build_ethernet_packet(const eth_config_t *cfg, uint8_t *buffer, size_t ma
 
     size_t payload_size = pkt_size - ETHER_HDR_LEN;
     uint8_t *payload_ptr = buffer + ETHER_HDR_LEN;
-    generate_payload(payload_ptr, payload_size, cfg->payload_type);
+    generate_payload_ext(payload_ptr, payload_size, cfg->payload_type, cfg->payload_file_path);
 
     return pkt_size;
 }

@@ -50,6 +50,7 @@ typedef struct {
     // Overall packet settings
     uint32_t total_length; // Total frame length: 64 to 1514 bytes
     payload_type_t payload_type;
+    char payload_file_path[256];
 } ipv4_config_t;
 
 // Set default IPv4 packet configuration

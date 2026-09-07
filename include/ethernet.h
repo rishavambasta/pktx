@@ -25,6 +25,7 @@ typedef struct {
     uint16_t ethertype;
     uint32_t total_length; // 64 to 1514 bytes
     payload_type_t payload_type;
+    char payload_file_path[256];
 } eth_config_t;
 
 // Set default Ethernet configuration values

@@ -65,6 +65,18 @@ static void test_payload(void) {
         if (buf[i] != buf[0]) rand_ok = true;
     }
     TEST_ASSERT(rand_ok, "generate_payload PSEUDO_RANDOM non-uniformity");
+
+    // Test binary file payload
+    FILE *tf = fopen("test_payload.bin", "wb");
+    if (tf) {
+        uint8_t sample_bytes[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+        fwrite(sample_bytes, 1, 4, tf);
+        fclose(tf);
+
+        generate_payload_ext(buf, 10, PAYLOAD_FILE, "test_payload.bin");
+        TEST_ASSERT(buf[0] == 0xDE && buf[1] == 0xAD && buf[2] == 0xBE && buf[3] == 0xEF && buf[4] == 0xDE, "generate_payload_ext binary file pattern repeat");
+        remove("test_payload.bin");
+    }
 }
 
 static void test_ethernet(void) {

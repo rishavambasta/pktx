@@ -17,6 +17,9 @@
 #ifndef strcasecmp
 #define strcasecmp _stricmp
 #endif
+#ifndef strncasecmp
+#define strncasecmp _strnicmp
+#endif
 #endif
 
 // Read a non-empty string line with default fallback
@@ -98,12 +101,20 @@ static uint16_t prompt_hex16(const char *label, uint16_t default_val) {
     }
 }
 
-static payload_type_t prompt_payload_type(void) {
+static payload_type_t prompt_payload_type(char *file_path_out, size_t file_path_len) {
     printf("\n--- Payload Options ---\n");
     printf("  1. All 0s (0x00...00)\n");
     printf("  2. All 1s (0xFF...FF)\n");
     printf("  3. Pseudo-random bytes\n");
-    uint32_t choice = prompt_uint("Select payload pattern", 1, 1, 3);
+    printf("  4. Binary file content\n");
+    uint32_t choice = prompt_uint("Select payload pattern", 1, 1, 4);
+
+    if (choice == 4 && file_path_out && file_path_len > 0) {
+        prompt_string("Enter path to binary payload file", "payload.bin", file_path_out, file_path_len);
+    } else if (file_path_out && file_path_len > 0) {
+        file_path_out[0] = '\0';
+    }
+
     return (payload_type_t)choice;
 }
 
@@ -147,7 +158,7 @@ static void build_l2_interactive(void) {
     cfg.ethertype = prompt_hex16("EtherType (e.g. 0x0800 for IPv4, 0x0806 for ARP)", cfg.ethertype);
 
     cfg.total_length = prompt_uint("Total Packet Size (bytes)", 64, PKTX_MIN_PACKET_SIZE, PKTX_MAX_PACKET_SIZE);
-    cfg.payload_type = prompt_payload_type();
+    cfg.payload_type = prompt_payload_type(cfg.payload_file_path, sizeof(cfg.payload_file_path));
 
     uint8_t pkt_buf[PKTX_MAX_PACKET_SIZE];
     size_t pkt_len = build_ethernet_packet(&cfg, pkt_buf, sizeof(pkt_buf));
@@ -226,7 +237,7 @@ static void build_l3_interactive(void) {
     }
 
     cfg.total_length = prompt_uint("\nTotal Frame Size (bytes)", 64, PKTX_MIN_PACKET_SIZE, PKTX_MAX_PACKET_SIZE);
-    cfg.payload_type = prompt_payload_type();
+    cfg.payload_type = prompt_payload_type(cfg.payload_file_path, sizeof(cfg.payload_file_path));
 
     uint8_t pkt_buf[PKTX_MAX_PACKET_SIZE];
     size_t pkt_len = build_ipv4_packet(&cfg, pkt_buf, sizeof(pkt_buf));
@@ -292,7 +303,7 @@ static void build_arp_interactive(void) {
     prompt_ipv4("Target IP Address", cfg.target_ip, &cfg.target_ip);
 
     cfg.total_length = prompt_uint("\nTotal Frame Size (bytes)", 64, PKTX_MIN_PACKET_SIZE, PKTX_MAX_PACKET_SIZE);
-    cfg.payload_type = prompt_payload_type();
+    cfg.payload_type = prompt_payload_type(cfg.payload_file_path, sizeof(cfg.payload_file_path));
 
     uint8_t pkt_buf[PKTX_MAX_PACKET_SIZE];
     size_t pkt_len = build_arp_packet(&cfg, pkt_buf, sizeof(pkt_buf));
@@ -438,32 +449,33 @@ void cli_run_interactive(void) {
 
 int cli_run_args(int argc, char *argv[]) {
     static struct option long_options[] = {
-        {"help",       no_argument,       0, 'h'},
-        {"interactive",no_argument,       0, 'i'},
-        {"l2",         no_argument,       0, '2'},
-        {"l3",         no_argument,       0, '3'},
-        {"arp",        no_argument,       0, 'a'},
-        {"opcode",     required_argument, 0, 'A'},
-        {"src-mac",    required_argument, 0, 's'},
-        {"dst-mac",    required_argument, 0, 'd'},
-        {"ethertype",  required_argument, 0, 'e'},
-        {"src-ip",     required_argument, 0, 'S'},
-        {"dst-ip",     required_argument, 0, 'D'},
-        {"sender-mac", required_argument, 0, 'm'},
-        {"sender-ip",  required_argument, 0, 'I'},
-        {"target-mac", required_argument, 0, 'M'},
-        {"target-ip",  required_argument, 0, 'T'},
-        {"ttl",        required_argument, 0, 't'},
-        {"proto",      required_argument, 0, 'P'},
-        {"size",       required_argument, 0, 'z'},
-        {"payload",    required_argument, 0, 'y'},
-        {"save",       required_argument, 0, 'o'},
-        {"load",       required_argument, 0, 'l'},
-        {"pcap",       required_argument, 0, 'p'},
-        {"tx",         required_argument, 0, 'x'},
-        {"count",      required_argument, 0, 'c'},
-        {"delay",      required_argument, 0, 'w'},
-        {"dry-run",    no_argument,       0, 'n'},
+        {"help",         no_argument,       0, 'h'},
+        {"interactive",  no_argument,       0, 'i'},
+        {"l2",           no_argument,       0, '2'},
+        {"l3",           no_argument,       0, '3'},
+        {"arp",          no_argument,       0, 'a'},
+        {"opcode",       required_argument, 0, 'A'},
+        {"src-mac",      required_argument, 0, 's'},
+        {"dst-mac",      required_argument, 0, 'd'},
+        {"ethertype",    required_argument, 0, 'e'},
+        {"src-ip",       required_argument, 0, 'S'},
+        {"dst-ip",       required_argument, 0, 'D'},
+        {"sender-mac",   required_argument, 0, 'm'},
+        {"sender-ip",    required_argument, 0, 'I'},
+        {"target-mac",   required_argument, 0, 'M'},
+        {"target-ip",    required_argument, 0, 'T'},
+        {"ttl",          required_argument, 0, 't'},
+        {"proto",        required_argument, 0, 'P'},
+        {"size",         required_argument, 0, 'z'},
+        {"payload",      required_argument, 0, 'y'},
+        {"payload-file", required_argument, 0, 'F'},
+        {"save",         required_argument, 0, 'o'},
+        {"load",         required_argument, 0, 'l'},
+        {"pcap",         required_argument, 0, 'p'},
+        {"tx",           required_argument, 0, 'x'},
+        {"count",        required_argument, 0, 'c'},
+        {"delay",        required_argument, 0, 'w'},
+        {"dry-run",      no_argument,       0, 'n'},
         {0, 0, 0, 0}
     };
 
@@ -484,6 +496,7 @@ int cli_run_args(int argc, char *argv[]) {
     uint32_t proto = IP_PROTO_UDP;
     uint32_t pkt_size = 64;
     payload_type_t payload_type = PAYLOAD_ALL_ZEROS;
+    char payload_file_path[256] = "";
 
     char save_path[256] = "";
     char load_path[256] = "";
@@ -494,37 +507,38 @@ int cli_run_args(int argc, char *argv[]) {
     bool dry_run = false;
 
     int opt, option_index = 0;
-    while ((opt = getopt_long(argc, argv, "hi23aA:s:d:e:S:D:m:I:M:T:t:P:z:y:o:l:p:x:c:w:n", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hi23aA:s:d:e:S:D:m:I:M:T:t:P:z:y:F:o:l:p:x:c:w:n", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 printf("pktx - Network Equipment Packet Tx & Test Tool\n\n");
                 printf("Usage: %s [OPTIONS]\n", argv[0]);
                 printf("Options:\n");
-                printf("  -i, --interactive       Run in interactive menu wizard mode\n");
-                printf("  -2, --l2                Construct L2 Ethernet packet\n");
-                printf("  -3, --l3                Construct L3 IPv4 packet\n");
-                printf("  -a, --arp               Construct ARP packet\n");
-                printf("  -A, --opcode OP         ARP Opcode (1=Request, 2=Reply)\n");
-                printf("  -s, --src-mac MAC       Source MAC address (default: 00:11:22:33:44:55)\n");
-                printf("  -d, --dst-mac MAC       Destination MAC address (default: FF:FF:FF:FF:FF:FF)\n");
-                printf("  -e, --ethertype HEX     EtherType (default: 0x0800)\n");
-                printf("  -S, --src-ip IP         Source IPv4 address (default: 192.168.1.100)\n");
-                printf("  -D, --dst-ip IP         Destination IPv4 address (default: 192.168.1.1)\n");
-                printf("  -m, --sender-mac MAC    ARP Sender MAC address\n");
-                printf("  -I, --sender-ip IP      ARP Sender IPv4 address\n");
-                printf("  -M, --target-mac MAC    ARP Target MAC address\n");
-                printf("  -T, --target-ip IP      ARP Target IPv4 address\n");
-                printf("  -t, --ttl NUM           Time To Live (default: 64)\n");
-                printf("  -P, --proto NUM         IP Protocol (1=ICMP, 6=TCP, 17=UDP, default: 17)\n");
-                printf("  -z, --size NUM          Total packet size 64-1514 bytes (default: 64)\n");
-                printf("  -y, --payload TYPE      Payload type: zeros|ones|rand (default: zeros)\n");
-                printf("  -o, --save FILE.strm    Save generated stream to .strm file\n");
-                printf("  -l, --load FILE.strm    Load stream from .strm file\n");
-                printf("  -p, --pcap FILE.pcapng  Parse Wireshark .pcap or .pcapng file\n");
-                printf("  -x, --tx IFACE          Transmit stream on network interface (e.g. eth0, lo)\n");
-                printf("  -c, --count NUM         Repetition count (default: 1)\n");
-                printf("  -w, --delay MS          Inter-Packet Gap / delay in ms (default: 0)\n");
-                printf("  -n, --dry-run           Simulate packet transmission without sending\n");
+                printf("  -i, --interactive          Run in interactive menu wizard mode\n");
+                printf("  -2, --l2                   Construct L2 Ethernet packet\n");
+                printf("  -3, --l3                   Construct L3 IPv4 packet\n");
+                printf("  -a, --arp                  Construct ARP packet\n");
+                printf("  -A, --opcode OP            ARP Opcode (1=Request, 2=Reply)\n");
+                printf("  -s, --src-mac MAC          Source MAC address (default: 00:11:22:33:44:55)\n");
+                printf("  -d, --dst-mac MAC          Destination MAC address (default: FF:FF:FF:FF:FF:FF)\n");
+                printf("  -e, --ethertype HEX        EtherType (default: 0x0800)\n");
+                printf("  -S, --src-ip IP            Source IPv4 address (default: 192.168.1.100)\n");
+                printf("  -D, --dst-ip IP            Destination IPv4 address (default: 192.168.1.1)\n");
+                printf("  -m, --sender-mac MAC       ARP Sender MAC address\n");
+                printf("  -I, --sender-ip IP         ARP Sender IPv4 address\n");
+                printf("  -M, --target-mac MAC       ARP Target MAC address\n");
+                printf("  -T, --target-ip IP         ARP Target IPv4 address\n");
+                printf("  -t, --ttl NUM              Time To Live (default: 64)\n");
+                printf("  -P, --proto NUM            IP Protocol (1=ICMP, 6=TCP, 17=UDP, default: 17)\n");
+                printf("  -z, --size NUM             Total packet size 64-1514 bytes (default: 64)\n");
+                printf("  -y, --payload TYPE         Payload type: zeros|ones|rand|file (default: zeros)\n");
+                printf("  -F, --payload-file FILE    Path to binary file for payload\n");
+                printf("  -o, --save FILE.strm       Save generated stream to .strm file\n");
+                printf("  -l, --load FILE.strm       Load stream from .strm file\n");
+                printf("  -p, --pcap FILE.pcapng     Parse Wireshark .pcap or .pcapng file\n");
+                printf("  -x, --tx IFACE             Transmit stream on network interface (e.g. eth0, lo)\n");
+                printf("  -c, --count NUM            Repetition count (default: 1)\n");
+                printf("  -w, --delay MS             Inter-Packet Gap / delay in ms (default: 0)\n");
+                printf("  -n, --dry-run              Simulate packet transmission without sending\n");
                 return 0;
 
             case 'i': cli_run_interactive(); return 0;
@@ -548,9 +562,22 @@ int cli_run_args(int argc, char *argv[]) {
             case 'P': parse_uint(optarg, 0, 255, &proto); break;
             case 'z': parse_uint(optarg, PKTX_MIN_PACKET_SIZE, PKTX_MAX_PACKET_SIZE, &pkt_size); break;
             case 'y':
-                if (strcasecmp(optarg, "ones") == 0 || strcmp(optarg, "1") == 0) payload_type = PAYLOAD_ALL_ONES;
-                else if (strcasecmp(optarg, "rand") == 0 || strcasecmp(optarg, "random") == 0) payload_type = PAYLOAD_PSEUDO_RANDOM;
-                else payload_type = PAYLOAD_ALL_ZEROS;
+                if (strncasecmp(optarg, "file:", 5) == 0) {
+                    payload_type = PAYLOAD_FILE;
+                    strncpy(payload_file_path, optarg + 5, sizeof(payload_file_path) - 1);
+                } else if (strcasecmp(optarg, "file") == 0 || strcmp(optarg, "4") == 0) {
+                    payload_type = PAYLOAD_FILE;
+                } else if (strcasecmp(optarg, "ones") == 0 || strcmp(optarg, "1") == 0) {
+                    payload_type = PAYLOAD_ALL_ONES;
+                } else if (strcasecmp(optarg, "rand") == 0 || strcasecmp(optarg, "random") == 0) {
+                    payload_type = PAYLOAD_PSEUDO_RANDOM;
+                } else {
+                    payload_type = PAYLOAD_ALL_ZEROS;
+                }
+                break;
+            case 'F':
+                payload_type = PAYLOAD_FILE;
+                strncpy(payload_file_path, optarg, sizeof(payload_file_path) - 1);
                 break;
             case 'o': strncpy(save_path, optarg, sizeof(save_path)-1); break;
             case 'l': strncpy(load_path, optarg, sizeof(load_path)-1); break;
@@ -597,6 +624,7 @@ int cli_run_args(int argc, char *argv[]) {
             parse_ipv4_address(target_ip_str, &cfg.target_ip);
             cfg.total_length = pkt_size;
             cfg.payload_type = payload_type;
+            strncpy(cfg.payload_file_path, payload_file_path, sizeof(cfg.payload_file_path) - 1);
             built_len = build_arp_packet(&cfg, pkt_buf, sizeof(pkt_buf));
         } else if (is_l3) {
             ipv4_config_t cfg;
@@ -609,6 +637,7 @@ int cli_run_args(int argc, char *argv[]) {
             cfg.protocol = (uint8_t)proto;
             cfg.total_length = pkt_size;
             cfg.payload_type = payload_type;
+            strncpy(cfg.payload_file_path, payload_file_path, sizeof(cfg.payload_file_path) - 1);
             built_len = build_ipv4_packet(&cfg, pkt_buf, sizeof(pkt_buf));
         } else {
             eth_config_t cfg;
@@ -618,6 +647,7 @@ int cli_run_args(int argc, char *argv[]) {
             parse_hex16(ethertype_str, &cfg.ethertype);
             cfg.total_length = pkt_size;
             cfg.payload_type = payload_type;
+            strncpy(cfg.payload_file_path, payload_file_path, sizeof(cfg.payload_file_path) - 1);
             built_len = build_ethernet_packet(&cfg, pkt_buf, sizeof(pkt_buf));
         }
 
