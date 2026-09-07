@@ -23,6 +23,61 @@ static void ensure_wsa_init(void) {
         }
     }
 }
+
+// Dynamic Npcap / WinPcap function pointer types
+typedef void pcap_t;
+typedef struct pcap_if {
+    struct pcap_if *next;
+    char *name;
+    char *description;
+    void *addresses;
+    uint32_t flags;
+} pcap_if_t;
+
+typedef pcap_t* (*pcap_open_live_fn)(const char *, int, int, int, char *);
+typedef int (*pcap_sendpacket_fn)(pcap_t *, const unsigned char *, int);
+typedef void (*pcap_close_fn)(pcap_t *);
+typedef int (*pcap_findalldevs_fn)(pcap_if_t **, char *);
+typedef void (*pcap_freealldevs_fn)(pcap_if_t *);
+
+static HMODULE h_wpcap = NULL;
+static pcap_open_live_fn pfn_pcap_open_live = NULL;
+static pcap_sendpacket_fn pfn_pcap_sendpacket = NULL;
+static pcap_close_fn pfn_pcap_close = NULL;
+static pcap_findalldevs_fn pfn_pcap_findalldevs = NULL;
+static pcap_freealldevs_fn pfn_pcap_freealldevs = NULL;
+
+static bool npcap_attempted = false;
+static bool npcap_available = false;
+
+static bool init_npcap(void) {
+    if (npcap_attempted) return npcap_available;
+    npcap_attempted = true;
+
+    // Load Npcap / WinPcap wpcap.dll dynamically
+    h_wpcap = LoadLibraryA("wpcap.dll");
+    if (!h_wpcap) {
+        // Try Npcap System directory fallback
+        char npcap_dir[MAX_PATH];
+        if (GetSystemDirectoryA(npcap_dir, sizeof(npcap_dir))) {
+            strncat(npcap_dir, "\\Npcap\\wpcap.dll", sizeof(npcap_dir) - strlen(npcap_dir) - 1);
+            h_wpcap = LoadLibraryA(npcap_dir);
+        }
+    }
+
+    if (h_wpcap) {
+        pfn_pcap_open_live   = (pcap_open_live_fn)GetProcAddress(h_wpcap, "pcap_open_live");
+        pfn_pcap_sendpacket  = (pcap_sendpacket_fn)GetProcAddress(h_wpcap, "pcap_sendpacket");
+        pfn_pcap_close       = (pcap_close_fn)GetProcAddress(h_wpcap, "pcap_close");
+        pfn_pcap_findalldevs = (pcap_findalldevs_fn)GetProcAddress(h_wpcap, "pcap_findalldevs");
+        pfn_pcap_freealldevs = (pcap_freealldevs_fn)GetProcAddress(h_wpcap, "pcap_freealldevs");
+
+        if (pfn_pcap_open_live && pfn_pcap_sendpacket && pfn_pcap_close) {
+            npcap_available = true;
+        }
+    }
+    return npcap_available;
+}
 #else
 #include <unistd.h>
 #include <sys/socket.h>
@@ -52,22 +107,41 @@ size_t get_network_interfaces(if_list_t *list) {
 
 #ifdef _WIN32
     ensure_wsa_init();
-    ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
-    ULONG outBufLen = 15360;
-    IP_ADAPTER_ADDRESSES *pAddresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufLen);
 
-    if (pAddresses && GetAdaptersAddresses(AF_UNSPEC, flags, NULL, pAddresses, &outBufLen) == NO_ERROR) {
-        for (IP_ADAPTER_ADDRESSES *pCurr = pAddresses; pCurr && list->count < MAX_IF_ENTRIES; pCurr = pCurr->Next) {
-            char name[32];
-            char desc[128];
-            snprintf(name, sizeof(name), "%ls", pCurr->FriendlyName ? pCurr->FriendlyName : L"Adapter");
-            snprintf(desc, sizeof(desc), "%s", pCurr->AdapterName ? pCurr->AdapterName : "");
-
-            strncpy(list->interfaces[list->count].name, name, sizeof(list->interfaces[list->count].name) - 1);
-            strncpy(list->interfaces[list->count].description, desc, sizeof(list->interfaces[list->count].description) - 1);
-            list->count++;
+    // Check if Npcap is available for device enumeration
+    if (init_npcap() && pfn_pcap_findalldevs && pfn_pcap_freealldevs) {
+        pcap_if_t *alldevs = NULL;
+        char errbuf[256] = {0};
+        if (pfn_pcap_findalldevs(&alldevs, errbuf) == 0 && alldevs) {
+            for (pcap_if_t *d = alldevs; d && list->count < MAX_IF_ENTRIES; d = d->next) {
+                strncpy(list->interfaces[list->count].name, d->name, sizeof(list->interfaces[list->count].name) - 1);
+                snprintf(list->interfaces[list->count].description, sizeof(list->interfaces[list->count].description),
+                         "%s", d->description ? d->description : "Npcap Interface");
+                list->count++;
+            }
+            pfn_pcap_freealldevs(alldevs);
         }
-        free(pAddresses);
+    }
+
+    // Fallback to Win32 IP Helper API if Npcap device list is empty
+    if (list->count == 0) {
+        ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
+        ULONG outBufLen = 15360;
+        IP_ADAPTER_ADDRESSES *pAddresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufLen);
+
+        if (pAddresses && GetAdaptersAddresses(AF_UNSPEC, flags, NULL, pAddresses, &outBufLen) == NO_ERROR) {
+            for (IP_ADAPTER_ADDRESSES *pCurr = pAddresses; pCurr && list->count < MAX_IF_ENTRIES; pCurr = pCurr->Next) {
+                char name[32];
+                char desc[128];
+                snprintf(name, sizeof(name), "%ls", pCurr->FriendlyName ? pCurr->FriendlyName : L"Adapter");
+                snprintf(desc, sizeof(desc), "%s", pCurr->AdapterName ? pCurr->AdapterName : "");
+
+                strncpy(list->interfaces[list->count].name, name, sizeof(list->interfaces[list->count].name) - 1);
+                strncpy(list->interfaces[list->count].description, desc, sizeof(list->interfaces[list->count].description) - 1);
+                list->count++;
+            }
+            free(pAddresses);
+        }
     }
 #else
     struct ifaddrs *ifaddr, *ifa;
@@ -131,9 +205,35 @@ bool transmit_packet(const char *ifname, const uint8_t *pkt_data, size_t pkt_len
 
 #ifdef _WIN32
     ensure_wsa_init();
-    printf("[Windows] Raw L2 socket transmission requires Npcap / WinPcap driver on Windows.\n");
-    printf("[Windows] Simulating transmission of packet (%zu bytes) on interface '%s'\n", pkt_len, ifname);
-    return true;
+    if (init_npcap()) {
+        char errbuf[256] = {0};
+        pcap_t *p = pfn_pcap_open_live(ifname, 65535, 1, 1000, errbuf);
+        if (!p && strncmp(ifname, "\\Device\\", 8) != 0) {
+            char devname[256];
+            snprintf(devname, sizeof(devname), "\\Device\\NPF_%s", ifname);
+            p = pfn_pcap_open_live(devname, 65535, 1, 1000, errbuf);
+        }
+
+        if (p) {
+            int ret = pfn_pcap_sendpacket(p, pkt_data, (int)pkt_len);
+            pfn_pcap_close(p);
+            if (ret == 0) {
+                printf("[Windows Npcap] Transmitted packet (%zu bytes) on wire via interface '%s'\n", pkt_len, ifname);
+                return true;
+            } else {
+                fprintf(stderr, "[Windows Npcap] Error sending packet on interface '%s'\n", ifname);
+                return false;
+            }
+        } else {
+            fprintf(stderr, "[Windows Npcap] Unable to open interface '%s': %s\n", ifname, errbuf);
+            return false;
+        }
+    } else {
+        printf("[Windows Notice] Npcap / WinPcap driver (wpcap.dll) is not installed on this Windows system.\n");
+        printf("  - To transmit live raw Ethernet packets on physical network interfaces, install free Npcap driver from https://npcap.com/\n");
+        printf("  - Simulating transmission of packet (%zu bytes) on interface '%s'\n", pkt_len, ifname);
+        return true;
+    }
 #else
     int raw_sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (raw_sock < 0) {
