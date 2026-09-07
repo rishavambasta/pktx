@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "ethernet.h"
 #include "ipv4.h"
+#include "arp.h"
 #include "payload.h"
 #include "strm.h"
 #include "pcapng.h"
@@ -25,7 +26,6 @@ static void prompt_string(const char *label, const char *default_val, char *buf,
 
     char temp[256];
     if (fgets(temp, sizeof(temp), stdin)) {
-        // Strip trailing newline
         temp[strcspn(temp, "\r\n")] = '\0';
         if (strlen(temp) == 0 && default_val) {
             strncpy(buf, default_val, buf_len - 1);
@@ -40,7 +40,6 @@ static void prompt_string(const char *label, const char *default_val, char *buf,
     }
 }
 
-// Prompt and validate MAC address
 static void prompt_mac(const char *label, const uint8_t default_mac[6], uint8_t out_mac[6]) {
     char def_str[18];
     format_mac_address(default_mac, def_str, sizeof(def_str));
@@ -55,7 +54,6 @@ static void prompt_mac(const char *label, const uint8_t default_mac[6], uint8_t 
     }
 }
 
-// Prompt and validate IPv4 address
 static void prompt_ipv4(const char *label, uint32_t default_ip, uint32_t *out_ip) {
     char def_str[16];
     format_ipv4_address(default_ip, def_str, sizeof(def_str));
@@ -70,7 +68,6 @@ static void prompt_ipv4(const char *label, uint32_t default_ip, uint32_t *out_ip
     }
 }
 
-// Prompt and validate integer range
 static uint32_t prompt_uint(const char *label, uint32_t default_val, uint32_t min_val, uint32_t max_val) {
     char def_str[32];
     snprintf(def_str, sizeof(def_str), "%u", default_val);
@@ -86,7 +83,6 @@ static uint32_t prompt_uint(const char *label, uint32_t default_val, uint32_t mi
     }
 }
 
-// Prompt and validate 16-bit hex integer
 static uint16_t prompt_hex16(const char *label, uint16_t default_val) {
     char def_str[32];
     snprintf(def_str, sizeof(def_str), "0x%04X", default_val);
@@ -102,7 +98,6 @@ static uint16_t prompt_hex16(const char *label, uint16_t default_val) {
     }
 }
 
-// Prompt for payload type
 static payload_type_t prompt_payload_type(void) {
     printf("\n--- Payload Options ---\n");
     printf("  1. All 0s (0x00...00)\n");
@@ -172,7 +167,6 @@ static void build_l2_interactive(void) {
     strm_init(&stream, 2);
     strm_add_packet(&stream, pkt_buf, pkt_len, 0, 1);
 
-    // Prompt save .strm format
     char save_choice[16];
     prompt_string("\nSave packet stream to .strm file? (y/n)", "y", save_choice, sizeof(save_choice));
     if (strcasecmp(save_choice, "y") == 0 || strcasecmp(save_choice, "yes") == 0) {
@@ -185,7 +179,6 @@ static void build_l2_interactive(void) {
         }
     }
 
-    // Prompt transmission
     char tx_choice[16];
     prompt_string("Transmit packet now? (y/n)", "y", tx_choice, sizeof(tx_choice));
     if (strcasecmp(tx_choice, "y") == 0 || strcasecmp(tx_choice, "yes") == 0) {
@@ -257,7 +250,6 @@ static void build_l3_interactive(void) {
     strm_init(&stream, 3);
     strm_add_packet(&stream, pkt_buf, pkt_len, 0, 1);
 
-    // Prompt save .strm format
     char save_choice[16];
     prompt_string("\nSave packet stream to .strm file? (y/n)", "y", save_choice, sizeof(save_choice));
     if (strcasecmp(save_choice, "y") == 0 || strcasecmp(save_choice, "yes") == 0) {
@@ -270,7 +262,72 @@ static void build_l3_interactive(void) {
         }
     }
 
-    // Prompt transmission
+    char tx_choice[16];
+    prompt_string("Transmit packet now? (y/n)", "y", tx_choice, sizeof(tx_choice));
+    if (strcasecmp(tx_choice, "y") == 0 || strcasecmp(tx_choice, "yes") == 0) {
+        prompt_transmission(&stream);
+    }
+
+    strm_free(&stream);
+}
+
+static void build_arp_interactive(void) {
+    printf("\n=========================================\n");
+    printf("        ARP Packet Generator             \n");
+    printf("=========================================\n");
+
+    uint32_t op_choice = prompt_uint("Select ARP Operation (1 = Request [Who Has?], 2 = Reply [Is At])", 1, 1, 2);
+
+    arp_config_t cfg;
+    arp_config_set_defaults(&cfg, (uint16_t)op_choice);
+
+    printf("\n--- L2 Ethernet Header Fields ---\n");
+    prompt_mac("Destination MAC", cfg.dst_mac, cfg.dst_mac);
+    prompt_mac("Source MAC", cfg.src_mac, cfg.src_mac);
+
+    printf("\n--- ARP Header Fields ---\n");
+    prompt_mac("Sender MAC Address", cfg.sender_mac, cfg.sender_mac);
+    prompt_ipv4("Sender IP Address", cfg.sender_ip, &cfg.sender_ip);
+    prompt_mac("Target MAC Address", cfg.target_mac, cfg.target_mac);
+    prompt_ipv4("Target IP Address", cfg.target_ip, &cfg.target_ip);
+
+    cfg.total_length = prompt_uint("\nTotal Frame Size (bytes)", 64, PKTX_MIN_PACKET_SIZE, PKTX_MAX_PACKET_SIZE);
+    cfg.payload_type = prompt_payload_type();
+
+    uint8_t pkt_buf[PKTX_MAX_PACKET_SIZE];
+    size_t pkt_len = build_arp_packet(&cfg, pkt_buf, sizeof(pkt_buf));
+
+    if (pkt_len == 0) {
+        printf("\n[!] Error building ARP packet.\n");
+        return;
+    }
+
+    printf("\n--- Generated ARP Packet Frame ---\n");
+    eth_hdr_t eth_hdr;
+    parse_ethernet_header(pkt_buf, pkt_len, &eth_hdr, NULL, NULL);
+    print_ethernet_header(&eth_hdr, pkt_len);
+
+    arp_hdr_t arp_hdr;
+    parse_arp_header(pkt_buf, pkt_len, &arp_hdr, NULL, NULL);
+    print_arp_header(&arp_hdr);
+    print_hex_dump("Raw Packet Bytes", pkt_buf, pkt_len);
+
+    strm_stream_t stream;
+    strm_init(&stream, 2);
+    strm_add_packet(&stream, pkt_buf, pkt_len, 0, 1);
+
+    char save_choice[16];
+    prompt_string("\nSave packet stream to .strm file? (y/n)", "y", save_choice, sizeof(save_choice));
+    if (strcasecmp(save_choice, "y") == 0 || strcasecmp(save_choice, "yes") == 0) {
+        char strm_path[256];
+        prompt_string("Enter .strm output filename", "arp_stream.strm", strm_path, sizeof(strm_path));
+        if (strm_save_file(strm_path, &stream)) {
+            printf("[+] Successfully saved packet stream to '%s'\n", strm_path);
+        } else {
+            printf("[!] Failed to save .strm file.\n");
+        }
+    }
+
     char tx_choice[16];
     prompt_string("Transmit packet now? (y/n)", "y", tx_choice, sizeof(tx_choice));
     if (strcasecmp(tx_choice, "y") == 0 || strcasecmp(tx_choice, "yes") == 0) {
@@ -357,20 +414,22 @@ void cli_run_interactive(void) {
         printf("=========================================\n");
         printf("  1. Construct & Transmit L2 Ethernet Packet\n");
         printf("  2. Construct & Transmit L3 IPv4 Packet\n");
-        printf("  3. Parse & Edit Wireshark .pcap/.pcapng File\n");
-        printf("  4. Load & Transmit Saved .strm File\n");
-        printf("  5. List Network Interfaces\n");
-        printf("  6. Exit\n");
+        printf("  3. Construct & Transmit ARP Packet\n");
+        printf("  4. Parse & Edit Wireshark .pcap/.pcapng File\n");
+        printf("  5. Load & Transmit Saved .strm File\n");
+        printf("  6. List Network Interfaces\n");
+        printf("  7. Exit\n");
 
-        uint32_t choice = prompt_uint("Select an option", 1, 1, 6);
+        uint32_t choice = prompt_uint("Select an option", 1, 1, 7);
 
         switch (choice) {
             case 1: build_l2_interactive(); break;
             case 2: build_l3_interactive(); break;
-            case 3: parse_pcap_interactive(); break;
-            case 4: load_strm_interactive(); break;
-            case 5: list_network_interfaces(); break;
-            case 6:
+            case 3: build_arp_interactive(); break;
+            case 4: parse_pcap_interactive(); break;
+            case 5: load_strm_interactive(); break;
+            case 6: list_network_interfaces(); break;
+            case 7:
                 printf("\nExiting pktx. Goodbye!\n");
                 return;
         }
@@ -383,11 +442,17 @@ int cli_run_args(int argc, char *argv[]) {
         {"interactive",no_argument,       0, 'i'},
         {"l2",         no_argument,       0, '2'},
         {"l3",         no_argument,       0, '3'},
+        {"arp",        no_argument,       0, 'a'},
+        {"opcode",     required_argument, 0, 'A'},
         {"src-mac",    required_argument, 0, 's'},
         {"dst-mac",    required_argument, 0, 'd'},
         {"ethertype",  required_argument, 0, 'e'},
         {"src-ip",     required_argument, 0, 'S'},
         {"dst-ip",     required_argument, 0, 'D'},
+        {"sender-mac", required_argument, 0, 'm'},
+        {"sender-ip",  required_argument, 0, 'I'},
+        {"target-mac", required_argument, 0, 'M'},
+        {"target-ip",  required_argument, 0, 'T'},
         {"ttl",        required_argument, 0, 't'},
         {"proto",      required_argument, 0, 'P'},
         {"size",       required_argument, 0, 'z'},
@@ -402,12 +467,19 @@ int cli_run_args(int argc, char *argv[]) {
         {0, 0, 0, 0}
     };
 
-    bool is_l2 = false, is_l3 = false;
+    bool is_l2 = false, is_l3 = false, is_arp = false;
+    uint32_t opcode = ARP_OP_REQUEST;
     char src_mac_str[32] = "00:11:22:33:44:55";
     char dst_mac_str[32] = "FF:FF:FF:FF:FF:FF";
     char ethertype_str[32] = "0x0800";
     char src_ip_str[32] = "192.168.1.100";
     char dst_ip_str[32] = "192.168.1.1";
+
+    char sender_mac_str[32] = "00:11:22:33:44:55";
+    char sender_ip_str[32]  = "192.168.1.100";
+    char target_mac_str[32] = "00:00:00:00:00:00";
+    char target_ip_str[32]  = "192.168.1.1";
+
     uint32_t ttl = 64;
     uint32_t proto = IP_PROTO_UDP;
     uint32_t pkt_size = 64;
@@ -422,7 +494,7 @@ int cli_run_args(int argc, char *argv[]) {
     bool dry_run = false;
 
     int opt, option_index = 0;
-    while ((opt = getopt_long(argc, argv, "hi23s:d:e:S:D:t:P:z:y:o:l:p:x:c:w:n", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hi23aA:s:d:e:S:D:m:I:M:T:t:P:z:y:o:l:p:x:c:w:n", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 printf("pktx - Network Equipment Packet Tx & Test Tool\n\n");
@@ -431,11 +503,17 @@ int cli_run_args(int argc, char *argv[]) {
                 printf("  -i, --interactive       Run in interactive menu wizard mode\n");
                 printf("  -2, --l2                Construct L2 Ethernet packet\n");
                 printf("  -3, --l3                Construct L3 IPv4 packet\n");
+                printf("  -a, --arp               Construct ARP packet\n");
+                printf("  -A, --opcode OP         ARP Opcode (1=Request, 2=Reply)\n");
                 printf("  -s, --src-mac MAC       Source MAC address (default: 00:11:22:33:44:55)\n");
                 printf("  -d, --dst-mac MAC       Destination MAC address (default: FF:FF:FF:FF:FF:FF)\n");
                 printf("  -e, --ethertype HEX     EtherType (default: 0x0800)\n");
                 printf("  -S, --src-ip IP         Source IPv4 address (default: 192.168.1.100)\n");
                 printf("  -D, --dst-ip IP         Destination IPv4 address (default: 192.168.1.1)\n");
+                printf("  -m, --sender-mac MAC    ARP Sender MAC address\n");
+                printf("  -I, --sender-ip IP      ARP Sender IPv4 address\n");
+                printf("  -M, --target-mac MAC    ARP Target MAC address\n");
+                printf("  -T, --target-ip IP      ARP Target IPv4 address\n");
                 printf("  -t, --ttl NUM           Time To Live (default: 64)\n");
                 printf("  -P, --proto NUM         IP Protocol (1=ICMP, 6=TCP, 17=UDP, default: 17)\n");
                 printf("  -z, --size NUM          Total packet size 64-1514 bytes (default: 64)\n");
@@ -452,11 +530,20 @@ int cli_run_args(int argc, char *argv[]) {
             case 'i': cli_run_interactive(); return 0;
             case '2': is_l2 = true; break;
             case '3': is_l3 = true; break;
+            case 'a': is_arp = true; break;
+            case 'A':
+                if (strcasecmp(optarg, "reply") == 0 || strcmp(optarg, "2") == 0) opcode = ARP_OP_REPLY;
+                else opcode = ARP_OP_REQUEST;
+                break;
             case 's': strncpy(src_mac_str, optarg, sizeof(src_mac_str)-1); break;
             case 'd': strncpy(dst_mac_str, optarg, sizeof(dst_mac_str)-1); break;
             case 'e': strncpy(ethertype_str, optarg, sizeof(ethertype_str)-1); break;
             case 'S': strncpy(src_ip_str, optarg, sizeof(src_ip_str)-1); break;
             case 'D': strncpy(dst_ip_str, optarg, sizeof(dst_ip_str)-1); break;
+            case 'm': strncpy(sender_mac_str, optarg, sizeof(sender_mac_str)-1); break;
+            case 'I': strncpy(sender_ip_str, optarg, sizeof(sender_ip_str)-1); break;
+            case 'M': strncpy(target_mac_str, optarg, sizeof(target_mac_str)-1); break;
+            case 'T': strncpy(target_ip_str, optarg, sizeof(target_ip_str)-1); break;
             case 't': parse_uint(optarg, 1, 255, &ttl); break;
             case 'P': parse_uint(optarg, 0, 255, &proto); break;
             case 'z': parse_uint(optarg, PKTX_MIN_PACKET_SIZE, PKTX_MAX_PACKET_SIZE, &pkt_size); break;
@@ -495,11 +582,23 @@ int cli_run_args(int argc, char *argv[]) {
             return 1;
         }
         strm_print_info(&stream);
-    } else if (is_l2 || is_l3) {
+    } else if (is_l2 || is_l3 || is_arp) {
         uint8_t pkt_buf[PKTX_MAX_PACKET_SIZE];
         size_t built_len = 0;
 
-        if (is_l3) {
+        if (is_arp) {
+            arp_config_t cfg;
+            arp_config_set_defaults(&cfg, (uint16_t)opcode);
+            parse_mac_address(src_mac_str, cfg.src_mac);
+            parse_mac_address(dst_mac_str, cfg.dst_mac);
+            parse_mac_address(sender_mac_str, cfg.sender_mac);
+            parse_mac_address(target_mac_str, cfg.target_mac);
+            parse_ipv4_address(sender_ip_str, &cfg.sender_ip);
+            parse_ipv4_address(target_ip_str, &cfg.target_ip);
+            cfg.total_length = pkt_size;
+            cfg.payload_type = payload_type;
+            built_len = build_arp_packet(&cfg, pkt_buf, sizeof(pkt_buf));
+        } else if (is_l3) {
             ipv4_config_t cfg;
             ipv4_config_set_defaults(&cfg);
             parse_mac_address(src_mac_str, cfg.src_mac);

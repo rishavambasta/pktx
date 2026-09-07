@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -Iinclude -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
 
-SRCS = src/utils.c src/payload.c src/ethernet.c src/ipv4.c src/strm.c src/pcapng.c src/transmitter.c src/cli.c
+SRCS = src/utils.c src/payload.c src/ethernet.c src/ipv4.c src/arp.c src/strm.c src/pcapng.c src/transmitter.c src/cli.c
 OBJS = $(SRCS:.c=.o)
 
 MAIN_SRC = src/main.c

@@ -7,8 +7,9 @@
 ## Key Features
 
 1. **Protocol Header Construction & Field Validation**:
-   - **L2 Ethernet II**: Destination MAC, Source MAC, EtherType (default: `0x0800` IPv4).
+   - **L2 Ethernet II**: Destination MAC, Source MAC, EtherType (default: `0x0800` IPv4, `0x0806` ARP).
    - **L3 IPv4**: Source IP, Destination IP, Version, IHL, TOS/DSCP, Identification, Flags (DF, MF), Fragment Offset, TTL, Protocol (UDP, TCP, ICMP, Raw), Header Checksum (auto RFC 1071 calculation or custom override).
+   - **ARP (Address Resolution Protocol)**: Opcode (Request / Who Has? vs Reply / Is At), Sender MAC, Sender IP, Target MAC, Target IP.
    - **Validation & Default Suggestions**: Every field is validated with suggested defaults for rapid testing.
 
 2. **Payload Patterns**:

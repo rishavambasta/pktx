@@ -1,6 +1,7 @@
 #include "utils.h"
 #include "ethernet.h"
 #include "ipv4.h"
+#include "arp.h"
 #include "payload.h"
 #include "strm.h"
 #include "pcapng.h"
@@ -110,6 +111,33 @@ static void test_ipv4(void) {
     TEST_ASSERT(chk == 0, "IPv4 Internet Checksum validation (sum should be 0)");
 }
 
+static void test_arp(void) {
+    printf("\n=== Running ARP Tests ===\n");
+    arp_config_t cfg;
+    arp_config_set_defaults(&cfg, ARP_OP_REQUEST);
+
+    uint8_t pkt_buf[PKTX_MAX_PACKET_SIZE];
+    size_t len = build_arp_packet(&cfg, pkt_buf, sizeof(pkt_buf));
+    TEST_ASSERT(len == 64, "build_arp_packet total size 64");
+
+    eth_hdr_t eth_hdr;
+    TEST_ASSERT(parse_ethernet_header(pkt_buf, len, &eth_hdr, NULL, NULL), "parse_ethernet_header on ARP frame");
+    TEST_ASSERT(eth_hdr.ethertype == ETHER_TYPE_ARP, "EtherType is ARP (0x0806)");
+
+    arp_hdr_t arp_hdr;
+    const uint8_t *arp_pad = NULL;
+    size_t arp_pad_len = 0;
+    TEST_ASSERT(parse_arp_header(pkt_buf, len, &arp_hdr, &arp_pad, &arp_pad_len), "parse_arp_header success");
+    TEST_ASSERT(arp_hdr.opcode == ARP_OP_REQUEST, "parse_arp_header opcode Request (1)");
+    TEST_ASSERT(arp_hdr.htype == 1 && arp_hdr.ptype == 0x0800, "ARP hardware/protocol types");
+
+    // Test ARP Reply building
+    arp_config_set_defaults(&cfg, ARP_OP_REPLY);
+    len = build_arp_packet(&cfg, pkt_buf, sizeof(pkt_buf));
+    TEST_ASSERT(parse_arp_header(pkt_buf, len, &arp_hdr, NULL, NULL), "parse_arp_header on ARP Reply");
+    TEST_ASSERT(arp_hdr.opcode == ARP_OP_REPLY, "parse_arp_header opcode Reply (2)");
+}
+
 static void test_strm(void) {
     printf("\n=== Running Stream (.strm) Tests ===\n");
     strm_stream_t stream_out, stream_in;
@@ -165,6 +193,7 @@ int main(void) {
     test_payload();
     test_ethernet();
     test_ipv4();
+    test_arp();
     test_strm();
     test_transmitter_dry_run();
 

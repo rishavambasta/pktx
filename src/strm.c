@@ -142,6 +142,8 @@ bool strm_load_file(const char *filepath, strm_stream_t *stream) {
     return true;
 }
 
+#include "arp.h"
+
 void strm_print_info(const strm_stream_t *stream) {
     if (!stream) return;
     printf("=== Stream (.strm) Information ===\n");
@@ -162,6 +164,11 @@ void strm_print_info(const strm_stream_t *stream) {
                 ipv4_hdr_t ip;
                 if (parse_ipv4_header(e->raw_data, e->pkt_len, &ip, NULL, NULL)) {
                     print_ipv4_header(&ip);
+                }
+            } else if (eth.ethertype == ETHER_TYPE_ARP) {
+                arp_hdr_t arp;
+                if (parse_arp_header(e->raw_data, e->pkt_len, &arp, NULL, NULL)) {
+                    print_arp_header(&arp);
                 }
             }
         }
