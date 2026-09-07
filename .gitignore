@@ -1,0 +1,13 @@
+# Build artifacts
+*.o
+pktx
+pktx_test
+
+# Stream files
+*.strm
+samples/*.strm
+
+# OS / Editor temporary files
+.DS_Store
+*.swp
+*.swo
