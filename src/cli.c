@@ -120,14 +120,23 @@ static payload_type_t prompt_payload_type(char *file_path_out, size_t file_path_
 
 static void prompt_transmission(strm_stream_t *stream) {
     printf("\n--- Packet Transmission ---\n");
-    list_network_interfaces();
+    if_list_t if_list;
+    get_network_interfaces(&if_list);
+    print_network_interfaces(&if_list);
 
     tx_options_t tx_opts;
     tx_options_set_defaults(&tx_opts);
 
-    char if_input[32];
-    prompt_string("Enter target network interface name", tx_opts.interface_name, if_input, sizeof(if_input));
-    strncpy(tx_opts.interface_name, if_input, sizeof(tx_opts.interface_name) - 1);
+    if (if_list.count > 0) {
+        char prompt_lbl[64];
+        snprintf(prompt_lbl, sizeof(prompt_lbl), "Select target network interface index [1-%zu]", if_list.count);
+        uint32_t if_idx = prompt_uint(prompt_lbl, 1, 1, (uint32_t)if_list.count);
+        strncpy(tx_opts.interface_name, if_list.interfaces[if_idx - 1].name, sizeof(tx_opts.interface_name) - 1);
+    } else {
+        char if_input[32];
+        prompt_string("Enter target network interface name", tx_opts.interface_name, if_input, sizeof(if_input));
+        strncpy(tx_opts.interface_name, if_input, sizeof(tx_opts.interface_name) - 1);
+    }
 
     tx_opts.count = prompt_uint("Enter transmission repetitions (0 for continuous loop, default 1)", 1, 0, 1000000);
     tx_opts.delay_ms = prompt_uint("Enter Inter-Packet Gap (IPG) / delay in milliseconds (0 for minimal IPG)", 0, 0, 60000);
@@ -582,7 +591,21 @@ int cli_run_args(int argc, char *argv[]) {
             case 'o': strncpy(save_path, optarg, sizeof(save_path)-1); break;
             case 'l': strncpy(load_path, optarg, sizeof(load_path)-1); break;
             case 'p': strncpy(pcap_path, optarg, sizeof(pcap_path)-1); break;
-            case 'x': strncpy(tx_ifname, optarg, sizeof(tx_ifname)-1); break;
+            case 'x': {
+                uint32_t idx_val;
+                if (parse_uint(optarg, 1, 100, &idx_val)) {
+                    if_list_t if_list;
+                    get_network_interfaces(&if_list);
+                    if (idx_val >= 1 && idx_val <= if_list.count) {
+                        strncpy(tx_ifname, if_list.interfaces[idx_val - 1].name, sizeof(tx_ifname) - 1);
+                    } else {
+                        strncpy(tx_ifname, optarg, sizeof(tx_ifname) - 1);
+                    }
+                } else {
+                    strncpy(tx_ifname, optarg, sizeof(tx_ifname) - 1);
+                }
+                break;
+            }
             case 'c': parse_uint(optarg, 0, 1000000, &count); break;
             case 'w': parse_uint(optarg, 0, 60000, &delay_ms); break;
             case 'n': dry_run = true; break;

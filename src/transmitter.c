@@ -46,8 +46,10 @@ void tx_options_set_defaults(tx_options_t *opts) {
     opts->dry_run = false;
 }
 
-void list_network_interfaces(void) {
-    printf("=== Available Network Interfaces ===\n");
+size_t get_network_interfaces(if_list_t *list) {
+    if (!list) return 0;
+    list->count = 0;
+
 #ifdef _WIN32
     ensure_wsa_init();
     ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
@@ -55,28 +57,63 @@ void list_network_interfaces(void) {
     IP_ADAPTER_ADDRESSES *pAddresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufLen);
 
     if (pAddresses && GetAdaptersAddresses(AF_UNSPEC, flags, NULL, pAddresses, &outBufLen) == NO_ERROR) {
-        for (IP_ADAPTER_ADDRESSES *pCurr = pAddresses; pCurr; pCurr = pCurr->Next) {
-            wprintf(L"  - Interface: %s (Friendly: %s)\n", pCurr->AdapterName, pCurr->FriendlyName);
+        for (IP_ADAPTER_ADDRESSES *pCurr = pAddresses; pCurr && list->count < MAX_IF_ENTRIES; pCurr = pCurr->Next) {
+            char name[32];
+            char desc[128];
+            snprintf(name, sizeof(name), "%ls", pCurr->FriendlyName ? pCurr->FriendlyName : L"Adapter");
+            snprintf(desc, sizeof(desc), "%s", pCurr->AdapterName ? pCurr->AdapterName : "");
+
+            strncpy(list->interfaces[list->count].name, name, sizeof(list->interfaces[list->count].name) - 1);
+            strncpy(list->interfaces[list->count].description, desc, sizeof(list->interfaces[list->count].description) - 1);
+            list->count++;
         }
         free(pAddresses);
-    } else {
-        if (pAddresses) free(pAddresses);
-        printf("  - Local Loopback / Generic Network Adapter\n");
     }
 #else
     struct ifaddrs *ifaddr, *ifa;
-    if (getifaddrs(&ifaddr) == -1) {
-        perror("getifaddrs");
-        return;
-    }
-    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr == NULL) continue;
-        if (ifa->ifa_addr->sa_family == AF_PACKET) {
-            printf("  - Interface: %s\n", ifa->ifa_name);
+    if (getifaddrs(&ifaddr) != -1) {
+        for (ifa = ifaddr; ifa != NULL && list->count < MAX_IF_ENTRIES; ifa = ifa->ifa_next) {
+            if (ifa->ifa_addr == NULL) continue;
+            if (ifa->ifa_addr->sa_family == AF_PACKET) {
+                bool already_added = false;
+                for (size_t k = 0; k < list->count; k++) {
+                    if (strcmp(list->interfaces[k].name, ifa->ifa_name) == 0) {
+                        already_added = true;
+                        break;
+                    }
+                }
+                if (!already_added) {
+                    strncpy(list->interfaces[list->count].name, ifa->ifa_name, sizeof(list->interfaces[list->count].name) - 1);
+                    snprintf(list->interfaces[list->count].description, sizeof(list->interfaces[list->count].description), "Network Interface");
+                    list->count++;
+                }
+            }
         }
+        freeifaddrs(ifaddr);
     }
-    freeifaddrs(ifaddr);
 #endif
+
+    if (list->count == 0) {
+        strncpy(list->interfaces[0].name, "lo", sizeof(list->interfaces[0].name) - 1);
+        strncpy(list->interfaces[0].description, "Local Loopback", sizeof(list->interfaces[0].description) - 1);
+        list->count = 1;
+    }
+
+    return list->count;
+}
+
+void print_network_interfaces(const if_list_t *list) {
+    if (!list) return;
+    printf("=== Available Network Interfaces ===\n");
+    for (size_t i = 0; i < list->count; i++) {
+        printf("  %zu. %s (%s)\n", i + 1, list->interfaces[i].name, list->interfaces[i].description);
+    }
+}
+
+void list_network_interfaces(void) {
+    if_list_t list;
+    get_network_interfaces(&list);
+    print_network_interfaces(&list);
 }
 
 bool transmit_packet(const char *ifname, const uint8_t *pkt_data, size_t pkt_len, bool dry_run) {

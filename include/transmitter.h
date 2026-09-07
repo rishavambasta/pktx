@@ -6,6 +6,18 @@
 #include <stdbool.h>
 #include "strm.h"
 
+#define MAX_IF_ENTRIES 32
+
+typedef struct {
+    char name[32];
+    char description[128];
+} if_info_t;
+
+typedef struct {
+    size_t count;
+    if_info_t interfaces[MAX_IF_ENTRIES];
+} if_list_t;
+
 typedef struct {
     char interface_name[32]; // e.g. "eth0", "wlan0", "lo"
     uint32_t count;          // Repetitions per packet entry (0 = loop indefinitely)
@@ -16,7 +28,13 @@ typedef struct {
 // Set default transmission options
 void tx_options_set_defaults(tx_options_t *opts);
 
-// List available network interfaces on system
+// Discover available network interfaces
+size_t get_network_interfaces(if_list_t *list);
+
+// Display numbered list of available network interfaces
+void print_network_interfaces(const if_list_t *list);
+
+// Legacy/helper function to list interfaces directly
 void list_network_interfaces(void);
 
 // Transmit single packet over specified network interface
