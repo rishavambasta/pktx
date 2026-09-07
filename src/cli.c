@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "pktx.h"
 #include "utils.h"
 #include "ethernet.h"
 #include "ipv4.h"
@@ -430,7 +431,8 @@ static void load_strm_interactive(void) {
 void cli_run_interactive(void) {
     while (1) {
         printf("\n=========================================\n");
-        printf("   pktx - Network Equipment Test Tool    \n");
+        printf("   pktx v%s - Network Equipment Tool     \n", PKTX_VERSION_STR);
+        printf("   Author: %s                      \n", PKTX_AUTHOR_STR);
         printf("=========================================\n");
         printf("  1. Construct & Transmit L2 Ethernet Packet\n");
         printf("  2. Construct & Transmit L3 IPv4 Packet\n");
@@ -458,6 +460,7 @@ void cli_run_interactive(void) {
 
 int cli_run_args(int argc, char *argv[]) {
     static struct option long_options[] = {
+        {"version",      no_argument,       0, 'v'},
         {"help",         no_argument,       0, 'h'},
         {"interactive",  no_argument,       0, 'i'},
         {"l2",           no_argument,       0, '2'},
@@ -516,12 +519,18 @@ int cli_run_args(int argc, char *argv[]) {
     bool dry_run = false;
 
     int opt, option_index = 0;
-    while ((opt = getopt_long(argc, argv, "hi23aA:s:d:e:S:D:m:I:M:T:t:P:z:y:F:o:l:p:x:c:w:n", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "vhi23aA:s:d:e:S:D:m:I:M:T:t:P:z:y:F:o:l:p:x:c:w:n", long_options, &option_index)) != -1) {
         switch (opt) {
+            case 'v':
+                printf("pktx v%s by %s\n", PKTX_VERSION_STR, PKTX_AUTHOR_STR);
+                return 0;
+
             case 'h':
-                printf("pktx - Network Equipment Packet Tx & Test Tool\n\n");
+                printf("pktx v%s - Network Equipment Packet Tx & Test Tool\n", PKTX_VERSION_STR);
+                printf("Author: %s\n\n", PKTX_AUTHOR_STR);
                 printf("Usage: %s [OPTIONS]\n", argv[0]);
                 printf("Options:\n");
+                printf("  -v, --version              Display version and author info\n");
                 printf("  -i, --interactive          Run in interactive menu wizard mode\n");
                 printf("  -2, --l2                   Construct L2 Ethernet packet\n");
                 printf("  -3, --l3                   Construct L3 IPv4 packet\n");
