@@ -66,11 +66,11 @@ static bool init_npcap(void) {
     }
 
     if (h_wpcap) {
-        pfn_pcap_open_live   = (pcap_open_live_fn)GetProcAddress(h_wpcap, "pcap_open_live");
-        pfn_pcap_sendpacket  = (pcap_sendpacket_fn)GetProcAddress(h_wpcap, "pcap_sendpacket");
-        pfn_pcap_close       = (pcap_close_fn)GetProcAddress(h_wpcap, "pcap_close");
-        pfn_pcap_findalldevs = (pcap_findalldevs_fn)GetProcAddress(h_wpcap, "pcap_findalldevs");
-        pfn_pcap_freealldevs = (pcap_freealldevs_fn)GetProcAddress(h_wpcap, "pcap_freealldevs");
+        pfn_pcap_open_live   = (pcap_open_live_fn)(void *)(intptr_t)GetProcAddress(h_wpcap, "pcap_open_live");
+        pfn_pcap_sendpacket  = (pcap_sendpacket_fn)(void *)(intptr_t)GetProcAddress(h_wpcap, "pcap_sendpacket");
+        pfn_pcap_close       = (pcap_close_fn)(void *)(intptr_t)GetProcAddress(h_wpcap, "pcap_close");
+        pfn_pcap_findalldevs = (pcap_findalldevs_fn)(void *)(intptr_t)GetProcAddress(h_wpcap, "pcap_findalldevs");
+        pfn_pcap_freealldevs = (pcap_freealldevs_fn)(void *)(intptr_t)GetProcAddress(h_wpcap, "pcap_freealldevs");
 
         if (pfn_pcap_open_live && pfn_pcap_sendpacket && pfn_pcap_close) {
             npcap_available = true;
