@@ -20,26 +20,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install MinGW Cross-Compiler
+      - name: Install Cross-Compilers
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64
+          sudo apt-get install -y gcc-mingw-w64 gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
 
-      - name: Build Linux Binary & Run Unit Tests
+      - name: Build Linux x86_64 Binary & Run Unit Tests
         run: |
           make clean
-          make
+          make CC=gcc
           ./pktx_test
 
-      - name: Build Windows Binary
+      - name: Prepare Output Directory
+        run: mkdir -p dist && cp pktx dist/pktx-linux-x86_64
+
+      - name: Build Linux AArch64 (ARM 64-bit) Binary
+        run: |
+          make clean
+          make CC=aarch64-linux-gnu-gcc
+          cp pktx dist/pktx-linux-aarch64
+
+      - name: Build Linux ARMhf (ARM 32-bit) Binary
+        run: |
+          make clean
+          make CC=arm-linux-gnueabihf-gcc
+          cp pktx dist/pktx-linux-armhf
+
+      - name: Build Windows x86_64 Binary
         run: |
           make -f Makefile.win clean
           make -f Makefile.win CC=x86_64-w64-mingw32-gcc
-
-      - name: Prepare Release Artifacts
-        run: |
-          mkdir -p dist
-          cp pktx dist/pktx-linux-x86_64
           cp pktx.exe dist/pktx-windows-x86_64.exe
 
       - name: Release Tagged Version
@@ -48,6 +58,8 @@ jobs:
         with:
           files: |
             dist/pktx-linux-x86_64
+            dist/pktx-linux-aarch64
+            dist/pktx-linux-armhf
             dist/pktx-windows-x86_64.exe
           generate_release_notes: true
 
@@ -60,4 +72,6 @@ jobs:
           prerelease: true
           files: |
             dist/pktx-linux-x86_64
+            dist/pktx-linux-aarch64
+            dist/pktx-linux-armhf
             dist/pktx-windows-x86_64.exe
