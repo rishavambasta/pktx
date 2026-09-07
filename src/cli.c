@@ -399,13 +399,209 @@ static void parse_pcap_interactive(void) {
     strm_free(&stream);
 }
 
+static void edit_strm_interactive(strm_stream_t *stream) {
+    if (!stream || stream->count == 0) {
+        printf("[!] Stream is empty. Nothing to edit.\n");
+        return;
+    }
+
+    while (1) {
+        printf("\n=========================================\n");
+        printf("       Edit Stream (.strm) Contents      \n");
+        printf("=========================================\n");
+        strm_print_info(stream);
+
+        printf("\nStream Edit Menu:\n");
+        printf("  1. Edit Entry Repetitions\n");
+        printf("  2. Edit Entry Inter-Packet Gap / Delay (ms)\n");
+        printf("  3. Edit Packet Header / Fields\n");
+        printf("  4. Delete a Packet Entry\n");
+        printf("  5. Save Updated Stream to File\n");
+        printf("  6. Return to Previous Menu\n");
+
+        uint32_t choice = prompt_uint("Select an edit option", 1, 1, 6);
+        if (choice == 6) break;
+
+        if (choice == 1) {
+            uint32_t entry_idx = prompt_uint("Select entry # to edit repetitions (0 for ALL entries)", 0, 0, (uint32_t)stream->count);
+            uint32_t reps = prompt_uint("Enter new repetition count", 1, 1, 1000000);
+            if (entry_idx == 0) {
+                for (size_t i = 0; i < stream->count; i++) {
+                    stream->entries[i].repetitions = reps;
+                }
+                printf("[+] Updated repetitions to %u for all %zu entries.\n", reps, stream->count);
+            } else {
+                stream->entries[entry_idx - 1].repetitions = reps;
+                printf("[+] Updated repetitions for entry #%u to %u.\n", entry_idx, reps);
+            }
+        } else if (choice == 2) {
+            uint32_t entry_idx = prompt_uint("Select entry # to edit delay (0 for ALL entries)", 0, 0, (uint32_t)stream->count);
+            uint32_t delay = prompt_uint("Enter new Inter-Packet Gap / delay in ms", 0, 0, 60000);
+            if (entry_idx == 0) {
+                for (size_t i = 0; i < stream->count; i++) {
+                    stream->entries[i].delay_ms = delay;
+                }
+                printf("[+] Updated delay to %u ms for all %zu entries.\n", delay, stream->count);
+            } else {
+                stream->entries[entry_idx - 1].delay_ms = delay;
+                printf("[+] Updated delay for entry #%u to %u ms.\n", entry_idx, delay);
+            }
+        } else if (choice == 3) {
+            uint32_t entry_idx = prompt_uint("Select entry # to edit packet fields", 1, 1, (uint32_t)stream->count);
+            strm_entry_t *entry = &stream->entries[entry_idx - 1];
+            eth_hdr_t eth;
+            if (parse_ethernet_header(entry->raw_data, entry->pkt_len, &eth, NULL, NULL)) {
+                if (eth.ethertype == ETHER_TYPE_IPV4) {
+                    ipv4_hdr_t ip;
+                    if (parse_ipv4_header(entry->raw_data, entry->pkt_len, &ip, NULL, NULL)) {
+                        char smac_str[32], dmac_str[32], sip_str[32], dip_str[32];
+                        format_mac_address(eth.src_mac, smac_str, sizeof(smac_str));
+                        format_mac_address(eth.dst_mac, dmac_str, sizeof(dmac_str));
+                        format_ipv4_address(ip.src_ip, sip_str, sizeof(sip_str));
+                        format_ipv4_address(ip.dst_ip, dip_str, sizeof(dip_str));
+
+                        char new_smac[32], new_dmac[32], new_sip[32], new_dip[32];
+                        prompt_string("Source MAC address", smac_str, new_smac, sizeof(new_smac));
+                        prompt_string("Destination MAC address", dmac_str, new_dmac, sizeof(new_dmac));
+                        prompt_string("Source IPv4 address", sip_str, new_sip, sizeof(new_sip));
+                        prompt_string("Destination IPv4 address", dip_str, new_dip, sizeof(new_dip));
+
+                        uint32_t ttl = prompt_uint("Time to Live (TTL)", ip.ttl, 1, 255);
+                        uint32_t proto = prompt_uint("IP Protocol (1=ICMP, 6=TCP, 17=UDP)", ip.protocol, 0, 255);
+
+                        uint8_t smac_b[6], dmac_b[6];
+                        uint32_t sip_val, dip_val;
+                        if (parse_mac_address(new_smac, smac_b) && parse_mac_address(new_dmac, dmac_b) &&
+                            parse_ipv4_address(new_sip, &sip_val) && parse_ipv4_address(new_dip, &dip_val)) {
+
+                            ipv4_config_t cfg;
+                            ipv4_config_set_defaults(&cfg);
+                            memcpy(cfg.src_mac, smac_b, 6);
+                            memcpy(cfg.dst_mac, dmac_b, 6);
+                            cfg.src_ip = sip_val;
+                            cfg.dst_ip = dip_val;
+                            cfg.ttl = (uint8_t)ttl;
+                            cfg.protocol = (uint8_t)proto;
+                            cfg.total_length = entry->pkt_len;
+
+                            uint8_t *new_pkt = malloc(entry->pkt_len);
+                            if (new_pkt) {
+                                size_t nlen = build_ipv4_packet(&cfg, new_pkt, entry->pkt_len);
+                                if (nlen > 0) {
+                                    if (entry->pkt_len > 34) {
+                                        memcpy(new_pkt + 34, entry->raw_data + 34, entry->pkt_len - 34);
+                                    }
+                                    free(entry->raw_data);
+                                    entry->raw_data = new_pkt;
+                                    printf("[+] Successfully updated entry #%u IPv4 packet.\n", entry_idx);
+                                } else {
+                                    free(new_pkt);
+                                    printf("[-] Failed to construct updated IPv4 packet.\n");
+                                }
+                            }
+                        } else {
+                            printf("[-] Invalid MAC/IP address format.\n");
+                        }
+                    }
+                } else if (eth.ethertype == ETHER_TYPE_ARP) {
+                    arp_hdr_t arp;
+                    if (parse_arp_header(entry->raw_data, entry->pkt_len, &arp, NULL, NULL)) {
+                        char smac_str[32], dmac_str[32], sip_str[32], dip_str[32];
+                        format_mac_address(arp.sender_mac, smac_str, sizeof(smac_str));
+                        format_mac_address(arp.target_mac, dmac_str, sizeof(dmac_str));
+                        format_ipv4_address(arp.sender_ip, sip_str, sizeof(sip_str));
+                        format_ipv4_address(arp.target_ip, dip_str, sizeof(dip_str));
+
+                        char new_smac[32], new_dmac[32], new_sip[32], new_dip[32];
+                        prompt_string("ARP Sender MAC address", smac_str, new_smac, sizeof(new_smac));
+                        prompt_string("ARP Target MAC address", dmac_str, new_dmac, sizeof(new_dmac));
+                        prompt_string("ARP Sender IPv4 address", sip_str, new_sip, sizeof(new_sip));
+                        prompt_string("ARP Target IPv4 address", dip_str, new_dip, sizeof(new_dip));
+                        uint32_t opcode = prompt_uint("ARP Opcode (1=Request, 2=Reply)", arp.opcode, 1, 2);
+
+                        uint8_t smac_b[6], dmac_b[6];
+                        uint32_t sip_val, dip_val;
+                        if (parse_mac_address(new_smac, smac_b) && parse_mac_address(new_dmac, dmac_b) &&
+                            parse_ipv4_address(new_sip, &sip_val) && parse_ipv4_address(new_dip, &dip_val)) {
+
+                            arp_config_t cfg;
+                            arp_config_set_defaults(&cfg, (uint16_t)opcode);
+                            memcpy(cfg.sender_mac, smac_b, 6);
+                            memcpy(cfg.target_mac, dmac_b, 6);
+                            cfg.sender_ip = sip_val;
+                            cfg.target_ip = dip_val;
+                            cfg.opcode = (uint16_t)opcode;
+                            cfg.total_length = entry->pkt_len;
+
+                            uint8_t *new_pkt = malloc(entry->pkt_len);
+                            if (new_pkt) {
+                                size_t nlen = build_arp_packet(&cfg, new_pkt, entry->pkt_len);
+                                if (nlen > 0) {
+                                    free(entry->raw_data);
+                                    entry->raw_data = new_pkt;
+                                    printf("[+] Successfully updated entry #%u ARP packet.\n", entry_idx);
+                                } else {
+                                    free(new_pkt);
+                                    printf("[-] Failed to construct updated ARP packet.\n");
+                                }
+                            }
+                        } else {
+                            printf("[-] Invalid MAC/IP address format.\n");
+                        }
+                    }
+                } else {
+                    char smac_str[32], dmac_str[32];
+                    format_mac_address(eth.src_mac, smac_str, sizeof(smac_str));
+                    format_mac_address(eth.dst_mac, dmac_str, sizeof(dmac_str));
+
+                    char new_smac[32], new_dmac[32];
+                    prompt_string("Source MAC address", smac_str, new_smac, sizeof(new_smac));
+                    prompt_string("Destination MAC address", dmac_str, new_dmac, sizeof(new_dmac));
+                    uint16_t ethertype = prompt_hex16("EtherType", eth.ethertype);
+
+                    uint8_t smac_b[6], dmac_b[6];
+                    if (parse_mac_address(new_smac, smac_b) && parse_mac_address(new_dmac, dmac_b)) {
+                        memcpy(entry->raw_data, dmac_b, 6);
+                        memcpy(entry->raw_data + 6, smac_b, 6);
+                        entry->raw_data[12] = (ethertype >> 8) & 0xFF;
+                        entry->raw_data[13] = ethertype & 0xFF;
+                        printf("[+] Successfully updated entry #%u Ethernet header.\n", entry_idx);
+                    } else {
+                        printf("[-] Invalid MAC address format.\n");
+                    }
+                }
+            }
+        } else if (choice == 4) {
+            uint32_t entry_idx = prompt_uint("Select entry # to delete", 1, 1, (uint32_t)stream->count);
+            size_t idx = entry_idx - 1;
+            free(stream->entries[idx].raw_data);
+            for (size_t i = idx; i < stream->count - 1; i++) {
+                stream->entries[i] = stream->entries[i + 1];
+            }
+            stream->count--;
+            printf("[+] Deleted entry #%u. Remaining entries: %zu.\n", entry_idx, stream->count);
+            if (stream->count == 0) break;
+        } else if (choice == 5) {
+            char save_path[256];
+            prompt_string("Enter file path to save modified stream", "modified.strm", save_path, sizeof(save_path));
+            ensure_strm_extension(save_path, sizeof(save_path));
+            if (strm_save_file(save_path, stream)) {
+                printf("[+] Modified stream successfully saved to '%s'.\n", save_path);
+            } else {
+                printf("[-] Error saving stream to '%s'.\n", save_path);
+            }
+        }
+    }
+}
+
 static void load_strm_interactive(void) {
     printf("\n=========================================\n");
-    printf("         Load Stream (.strm) File        \n");
+    printf("   Load, Edit & Transmit Stream (.strm)  \n");
     printf("=========================================\n");
 
     char strm_path[256];
     prompt_string("Enter path to .strm file", "stream.strm", strm_path, sizeof(strm_path));
+    ensure_strm_extension(strm_path, sizeof(strm_path));
 
     strm_stream_t stream;
     strm_init(&stream, 2);
@@ -419,10 +615,30 @@ static void load_strm_interactive(void) {
     printf("\n[+] Loaded stream file '%s':\n", strm_path);
     strm_print_info(&stream);
 
-    char tx_choice[16];
-    prompt_string("\nTransmit stream now? (y/n)", "y", tx_choice, sizeof(tx_choice));
-    if (strcasecmp(tx_choice, "y") == 0 || strcasecmp(tx_choice, "yes") == 0) {
-        prompt_transmission(&stream);
+    while (1) {
+        printf("\nLoaded Stream Options:\n");
+        printf("  1. Transmit Stream Now\n");
+        printf("  2. Edit Stream (Repetitions, Delay, Packet Headers)\n");
+        printf("  3. Save Stream to File\n");
+        printf("  4. Return to Main Menu\n");
+
+        uint32_t choice = prompt_uint("Select an option", 1, 1, 4);
+        if (choice == 1) {
+            prompt_transmission(&stream);
+        } else if (choice == 2) {
+            edit_strm_interactive(&stream);
+        } else if (choice == 3) {
+            char save_path[256];
+            prompt_string("Enter file path to save .strm file", strm_path, save_path, sizeof(save_path));
+            ensure_strm_extension(save_path, sizeof(save_path));
+            if (strm_save_file(save_path, &stream)) {
+                printf("[+] Stream saved successfully to '%s'.\n", save_path);
+            } else {
+                printf("[-] Error saving stream to '%s'.\n", save_path);
+            }
+        } else if (choice == 4) {
+            break;
+        }
     }
 
     strm_free(&stream);

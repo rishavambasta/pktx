@@ -43,6 +43,14 @@ static void test_utils(void) {
     uint16_t hex_val;
     TEST_ASSERT(parse_hex16("0x0800", &hex_val) && hex_val == 0x0800, "parse_hex16 with 0x prefix");
     TEST_ASSERT(parse_hex16("0806", &hex_val) && hex_val == 0x0806, "parse_hex16 without prefix");
+
+    char file1[64] = "my_stream";
+    ensure_strm_extension(file1, sizeof(file1));
+    TEST_ASSERT(strcmp(file1, "my_stream.strm") == 0, "ensure_strm_extension append missing extension");
+
+    char file2[64] = "my_stream.strm";
+    ensure_strm_extension(file2, sizeof(file2));
+    TEST_ASSERT(strcmp(file2, "my_stream.strm") == 0, "ensure_strm_extension preserve existing extension");
 }
 
 static void test_payload(void) {
@@ -165,9 +173,9 @@ static void test_strm(void) {
     size_t len = build_ipv4_packet(&cfg, pkt_buf, sizeof(pkt_buf));
 
     TEST_ASSERT(strm_add_packet(&stream_out, pkt_buf, len, 10, 5), "strm_add_packet entry 1");
-    TEST_ASSERT(strm_save_file("test_out.strm", &stream_out), "strm_save_file");
+    TEST_ASSERT(strm_save_file("test_out", &stream_out), "strm_save_file with auto extension");
 
-    TEST_ASSERT(strm_load_file("test_out.strm", &stream_in), "strm_load_file");
+    TEST_ASSERT(strm_load_file("test_out", &stream_in), "strm_load_file with auto extension");
     TEST_ASSERT(stream_in.count == 1, "strm_load_file count matches");
     TEST_ASSERT(stream_in.entries[0].pkt_len == 128, "strm_load_file pkt_len matches");
     TEST_ASSERT(stream_in.entries[0].delay_ms == 10, "strm_load_file delay_ms matches");

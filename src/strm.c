@@ -50,7 +50,12 @@ bool strm_add_packet(strm_stream_t *stream, const uint8_t *pkt_data, size_t pkt_
 bool strm_save_file(const char *filepath, const strm_stream_t *stream) {
     if (!filepath || !stream) return false;
 
-    FILE *f = fopen(filepath, "wb");
+    char clean_path[512];
+    strncpy(clean_path, filepath, sizeof(clean_path) - 1);
+    clean_path[sizeof(clean_path) - 1] = '\0';
+    ensure_strm_extension(clean_path, sizeof(clean_path));
+
+    FILE *f = fopen(clean_path, "wb");
     if (!f) return false;
 
     strm_file_hdr_t file_hdr;
@@ -89,7 +94,12 @@ bool strm_save_file(const char *filepath, const strm_stream_t *stream) {
 bool strm_load_file(const char *filepath, strm_stream_t *stream) {
     if (!filepath || !stream) return false;
 
-    FILE *f = fopen(filepath, "rb");
+    char clean_path[512];
+    strncpy(clean_path, filepath, sizeof(clean_path) - 1);
+    clean_path[sizeof(clean_path) - 1] = '\0';
+    ensure_strm_extension(clean_path, sizeof(clean_path));
+
+    FILE *f = fopen(clean_path, "rb");
     if (!f) return false;
 
     strm_file_hdr_t file_hdr;

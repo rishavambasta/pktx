@@ -37,4 +37,7 @@ bool parse_hex16(const char *str, uint16_t *val_out);
 // Sleep helper for milliseconds
 void sleep_ms(uint32_t ms);
 
+// Ensure filename has .strm extension (automatically appends .strm if absent)
+void ensure_strm_extension(char *filename, size_t max_len);
+
 #endif // PKTX_UTILS_H

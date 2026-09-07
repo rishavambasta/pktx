@@ -144,3 +144,15 @@ void sleep_ms(uint32_t ms) {
     nanosleep(&ts, NULL);
 #endif
 }
+
+void ensure_strm_extension(char *filename, size_t max_len) {
+    if (!filename || max_len == 0) return;
+    size_t len = strlen(filename);
+    if (len == 0) return;
+
+    if (len < 5 || strcasecmp(filename + len - 5, ".strm") != 0) {
+        if (len + 5 < max_len) {
+            strcat(filename, ".strm");
+        }
+    }
+}
