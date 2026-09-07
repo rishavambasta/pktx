@@ -12,6 +12,12 @@
 #include <ctype.h>
 #include <getopt.h>
 
+#ifdef _WIN32
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#endif
+
 // Read a non-empty string line with default fallback
 static void prompt_string(const char *label, const char *default_val, char *buf, size_t buf_len) {
     printf("%s [%s]: ", label, default_val ? default_val : "");

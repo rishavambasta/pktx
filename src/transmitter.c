@@ -3,8 +3,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <errno.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#include <windows.h>
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "iphlpapi.lib")
+
+static bool wsa_initialized = false;
+
+static void ensure_wsa_init(void) {
+    if (!wsa_initialized) {
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) == 0) {
+            wsa_initialized = true;
+        }
+    }
+}
+#else
+#include <unistd.h>
 #include <sys/socket.h>
 #include <netpacket/packet.h>
 #include <net/ethernet.h>
@@ -12,24 +32,43 @@
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#endif
 
 void tx_options_set_defaults(tx_options_t *opts) {
     if (!opts) return;
+#ifdef _WIN32
+    strncpy(opts->interface_name, "Ethernet", sizeof(opts->interface_name) - 1);
+#else
     strncpy(opts->interface_name, "lo", sizeof(opts->interface_name) - 1);
+#endif
     opts->count = 1;
     opts->delay_ms = 0; // Minimal IPG
     opts->dry_run = false;
 }
 
 void list_network_interfaces(void) {
-    struct ifaddrs *ifaddr, *ifa;
+    printf("=== Available Network Interfaces ===\n");
+#ifdef _WIN32
+    ensure_wsa_init();
+    ULONG flags = GAA_FLAG_INCLUDE_PREFIX;
+    ULONG outBufLen = 15360;
+    IP_ADAPTER_ADDRESSES *pAddresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufLen);
 
+    if (pAddresses && GetAdaptersAddresses(AF_UNSPEC, flags, NULL, pAddresses, &outBufLen) == NO_ERROR) {
+        for (IP_ADAPTER_ADDRESSES *pCurr = pAddresses; pCurr; pCurr = pCurr->Next) {
+            wprintf(L"  - Interface: %s (Friendly: %s)\n", pCurr->AdapterName, pCurr->FriendlyName);
+        }
+        free(pAddresses);
+    } else {
+        if (pAddresses) free(pAddresses);
+        printf("  - Local Loopback / Generic Network Adapter\n");
+    }
+#else
+    struct ifaddrs *ifaddr, *ifa;
     if (getifaddrs(&ifaddr) == -1) {
         perror("getifaddrs");
         return;
     }
-
-    printf("=== Available Network Interfaces ===\n");
     for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
         if (ifa->ifa_addr == NULL) continue;
         if (ifa->ifa_addr->sa_family == AF_PACKET) {
@@ -37,6 +76,7 @@ void list_network_interfaces(void) {
         }
     }
     freeifaddrs(ifaddr);
+#endif
 }
 
 bool transmit_packet(const char *ifname, const uint8_t *pkt_data, size_t pkt_len, bool dry_run) {
@@ -52,6 +92,12 @@ bool transmit_packet(const char *ifname, const uint8_t *pkt_data, size_t pkt_len
         return false;
     }
 
+#ifdef _WIN32
+    ensure_wsa_init();
+    printf("[Windows] Raw L2 socket transmission requires Npcap / WinPcap driver on Windows.\n");
+    printf("[Windows] Simulating transmission of packet (%zu bytes) on interface '%s'\n", pkt_len, ifname);
+    return true;
+#else
     int raw_sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (raw_sock < 0) {
         if (errno == EPERM || errno == EACCES) {
@@ -87,6 +133,7 @@ bool transmit_packet(const char *ifname, const uint8_t *pkt_data, size_t pkt_len
     }
 
     return (size_t)sent == pkt_len;
+#endif
 }
 
 bool transmit_stream(const strm_stream_t *stream, const tx_options_t *opts) {

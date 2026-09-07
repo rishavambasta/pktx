@@ -2,7 +2,11 @@
 #include "utils.h"
 #include <stdio.h>
 #include <string.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <arpa/inet.h>
+#endif
 
 void eth_config_set_defaults(eth_config_t *cfg) {
     if (!cfg) return;

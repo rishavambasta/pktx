@@ -1,0 +1,32 @@
+# Makefile.win - MinGW / Windows Makefile for pktx
+CC ?= x86_64-w64-mingw32-gcc
+CFLAGS = -Wall -Wextra -std=c99 -Iinclude
+LDFLAGS = -lws2_32 -liphlpapi
+
+SRCS = src/utils.c src/payload.c src/ethernet.c src/ipv4.c src/strm.c src/pcapng.c src/transmitter.c src/cli.c
+OBJS = $(SRCS:.c=.o)
+
+MAIN_SRC = src/main.c
+MAIN_OBJ = src/main.o
+
+TEST_SRC = tests/test_pktx.c
+TEST_OBJ = tests/test_pktx.o
+
+TARGET = pktx.exe
+TEST_TARGET = pktx_test.exe
+
+.PHONY: all clean
+
+all: $(TARGET) $(TEST_TARGET)
+
+$(TARGET): $(OBJS) $(MAIN_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(TEST_TARGET): $(OBJS) $(TEST_OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f src/*.o tests/*.o $(TARGET) $(TEST_TARGET) *.exe

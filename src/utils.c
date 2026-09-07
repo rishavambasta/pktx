@@ -3,9 +3,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#else
 #include <arpa/inet.h>
 #include <time.h>
 #include <unistd.h>
+#endif
 
 bool parse_mac_address(const char *str, uint8_t mac[6]) {
     if (!str || !mac) return false;
@@ -125,8 +135,12 @@ bool parse_hex16(const char *str, uint16_t *val_out) {
 
 void sleep_ms(uint32_t ms) {
     if (ms == 0) return;
+#ifdef _WIN32
+    Sleep((DWORD)ms);
+#else
     struct timespec ts;
     ts.tv_sec = ms / 1000;
     ts.tv_nsec = (ms % 1000) * 1000000L;
     nanosleep(&ts, NULL);
+#endif
 }

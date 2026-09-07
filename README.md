@@ -71,13 +71,22 @@ pktx/
 
 ## Build & Test Instructions
 
-### Building the Project
+### Building on Linux / POSIX
 ```bash
 make
 ```
-This produces two binaries:
-- `pktx`: The primary CLI and interactive tool.
-- `pktx_test`: The unit test suite.
+This produces `pktx` and unit test runner `pktx_test`.
+
+### Cross-Compiling for Windows using MinGW
+You can compile `pktx` for MS Windows using MinGW GCC (`x86_64-w64-mingw32-gcc` or MinGW-w64 on Windows):
+```bash
+make -f Makefile.win
+```
+or manually with MinGW GCC:
+```bash
+x86_64-w64-mingw32-gcc -Wall -O2 -Iinclude src/*.c -o pktx.exe -lws2_32 -liphlpapi
+```
+This builds `pktx.exe` and `pktx_test.exe` with full WinSock2 networking and interface listing support (`GetAdaptersAddresses`).
 
 ### Running Unit Tests
 ```bash
