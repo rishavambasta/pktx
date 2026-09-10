@@ -935,8 +935,12 @@ int cli_run_args(int argc, char *argv[]) {
     if (strlen(tx_ifname) > 0 && stream.count > 0) {
         tx_options_t tx_opts;
         tx_options_set_defaults(&tx_opts);
-        strncpy(tx_opts.interface_name, tx_ifname, sizeof(tx_opts.interface_name)-1);
-        tx_opts.count = count;
+        strncpy(tx_opts.interface_name, tx_ifname, sizeof(tx_opts.interface_name) - 1);
+        if (strlen(load_path) > 0 || strlen(pcap_path) > 0) {
+            tx_opts.count = count;
+        } else {
+            tx_opts.count = 1;
+        }
         tx_opts.delay_ms = delay_ms;
         tx_opts.dry_run = dry_run;
         transmit_stream(&stream, &tx_opts);
