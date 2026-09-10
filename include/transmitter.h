@@ -20,7 +20,7 @@ typedef struct {
 
 typedef struct {
     char interface_name[256]; // e.g. "eth0", "wlan0", "\Device\NPF_{...}"
-    uint32_t count;          // Repetitions per packet entry (0 = loop indefinitely)
+    uint64_t count;          // Repetitions per packet entry (0 = loop indefinitely)
     uint32_t delay_ms;       // IPG / delay between packets in ms (0 = minimal IPG)
     bool dry_run;            // If true, simulate transmission without sending to raw socket
 } tx_options_t;

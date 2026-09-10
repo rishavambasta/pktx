@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -15,6 +16,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 #endif
 
 bool parse_mac_address(const char *str, uint8_t mac[6]) {
@@ -114,6 +116,17 @@ bool parse_uint(const char *str, uint32_t min, uint32_t max, uint32_t *val_out) 
     if (*endptr != '\0') return false;
     if (val < min || val > max) return false;
     *val_out = (uint32_t)val;
+    return true;
+}
+
+bool parse_u64(const char *str, uint64_t min, uint64_t max, uint64_t *val_out) {
+    if (!str || !val_out || *str == '\0') return false;
+    char *endptr = NULL;
+    errno = 0;
+    unsigned long long val = strtoull(str, &endptr, 10);
+    if (errno != 0 || *endptr != '\0') return false;
+    if ((uint64_t)val < min || (uint64_t)val > max) return false;
+    *val_out = (uint64_t)val;
     return true;
 }
 

@@ -277,6 +277,8 @@ bool transmit_packet(const char *ifname, const uint8_t *pkt_data, size_t pkt_len
 #endif
 }
 
+#include <inttypes.h>
+
 bool transmit_stream(const strm_stream_t *stream, const tx_options_t *opts) {
     if (!stream || stream->count == 0 || !opts) {
         fprintf(stderr, "Error: Empty stream or invalid transmission options.\n");
@@ -289,20 +291,20 @@ bool transmit_stream(const strm_stream_t *stream, const tx_options_t *opts) {
         printf("Mode: DRY-RUN SIMULATION (No actual packets on wire)\n");
     }
 
-    size_t total_sent = 0;
-    uint32_t run_count = opts->count;
+    uint64_t total_sent = 0;
+    uint64_t run_count = opts->count;
     if (run_count == 0) run_count = 1;
 
-    for (uint32_t r = 0; r < run_count; r++) {
+    for (uint64_t r = 0; r < run_count; r++) {
         for (size_t i = 0; i < stream->count; i++) {
             strm_entry_t *entry = &stream->entries[i];
-            uint32_t entry_reps = (entry->repetitions > 0) ? entry->repetitions : 1;
+            uint64_t entry_reps = (entry->repetitions > 0) ? entry->repetitions : 1;
             uint32_t delay = (opts->delay_ms > 0) ? opts->delay_ms : entry->delay_ms;
 
-            for (uint32_t rep = 0; rep < entry_reps; rep++) {
+            for (uint64_t rep = 0; rep < entry_reps; rep++) {
                 bool ok = transmit_packet(opts->interface_name, entry->raw_data, entry->pkt_len, opts->dry_run);
                 if (!ok) {
-                    fprintf(stderr, "Transmission aborted at entry #%zu, rep #%u.\n", i + 1, rep + 1);
+                    fprintf(stderr, "Transmission aborted at entry #%zu, rep #%" PRIu64 ".\n", i + 1, rep + 1);
                     return false;
                 }
                 total_sent++;
@@ -314,6 +316,6 @@ bool transmit_stream(const strm_stream_t *stream, const tx_options_t *opts) {
         }
     }
 
-    printf(">>> Successfully transmitted %zu total packet(s). <<<\n\n", total_sent);
+    printf(">>> Successfully transmitted %" PRIu64 " total packet(s). <<<\n\n", total_sent);
     return true;
 }

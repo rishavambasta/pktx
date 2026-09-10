@@ -19,13 +19,13 @@ typedef struct {
 typedef struct {
     uint32_t pkt_len;     // Frame length in bytes (64..1514)
     uint32_t delay_ms;    // Inter-packet gap / delay in ms
-    uint32_t repetitions; // Repetition count
+    uint64_t repetitions; // Repetition count (64-bit uint)
 } strm_pkt_entry_hdr_t;
 #pragma pack(pop)
 
 typedef struct {
     uint32_t delay_ms;
-    uint32_t repetitions;
+    uint64_t repetitions;
     size_t pkt_len;
     uint8_t *raw_data;
 } strm_entry_t;
@@ -43,7 +43,7 @@ void strm_init(strm_stream_t *stream, uint16_t protocol_level);
 void strm_free(strm_stream_t *stream);
 
 // Add raw packet buffer into stream container
-bool strm_add_packet(strm_stream_t *stream, const uint8_t *pkt_data, size_t pkt_len, uint32_t delay_ms, uint32_t repetitions);
+bool strm_add_packet(strm_stream_t *stream, const uint8_t *pkt_data, size_t pkt_len, uint32_t delay_ms, uint64_t repetitions);
 
 // Save stream container to file in .strm format
 bool strm_save_file(const char *filepath, const strm_stream_t *stream);

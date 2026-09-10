@@ -27,7 +27,7 @@ void strm_free(strm_stream_t *stream) {
     stream->count = 0;
 }
 
-bool strm_add_packet(strm_stream_t *stream, const uint8_t *pkt_data, size_t pkt_len, uint32_t delay_ms, uint32_t repetitions) {
+bool strm_add_packet(strm_stream_t *stream, const uint8_t *pkt_data, size_t pkt_len, uint32_t delay_ms, uint64_t repetitions) {
     if (!stream || !pkt_data || pkt_len < PKTX_MIN_PACKET_SIZE || pkt_len > PKTX_MAX_PACKET_SIZE) return false;
 
     strm_entry_t *new_entries = realloc(stream->entries, (stream->count + 1) * sizeof(strm_entry_t));
@@ -164,7 +164,7 @@ void strm_print_info(const strm_stream_t *stream) {
         strm_entry_t *e = &stream->entries[i];
         printf("\n-- Stream Entry #%zu --\n", i + 1);
         printf("  Packet Size  : %zu bytes\n", e->pkt_len);
-        printf("  Repetitions  : %u\n", e->repetitions);
+        printf("  Repetitions  : %" PRIu64 "\n", e->repetitions);
         printf("  Delay (IPG)  : %u ms\n", e->delay_ms);
 
         eth_hdr_t eth;

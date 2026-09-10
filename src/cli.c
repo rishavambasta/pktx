@@ -87,6 +87,21 @@ static uint32_t prompt_uint(const char *label, uint32_t default_val, uint32_t mi
     }
 }
 
+static uint64_t prompt_u64(const char *label, uint64_t default_val, uint64_t min_val, uint64_t max_val) {
+    char def_str[64];
+    snprintf(def_str, sizeof(def_str), "%" PRIu64, default_val);
+    char input[64];
+    uint64_t val;
+
+    while (1) {
+        prompt_string(label, def_str, input, sizeof(input));
+        if (parse_u64(input, min_val, max_val, &val)) {
+            return val;
+        }
+        printf("  [!] Invalid 64-bit integer or out of range [%" PRIu64 " .. %" PRIu64 "]. Try again.\n", min_val, max_val);
+    }
+}
+
 static uint16_t prompt_hex16(const char *label, uint16_t default_val) {
     char def_str[32];
     snprintf(def_str, sizeof(def_str), "0x%04X", default_val);
@@ -139,7 +154,7 @@ static void prompt_transmission(strm_stream_t *stream) {
         strncpy(tx_opts.interface_name, if_input, sizeof(tx_opts.interface_name) - 1);
     }
 
-    tx_opts.count = prompt_uint("Enter transmission repetitions (0 for continuous loop, default 1)", 1, 0, 1000000);
+    tx_opts.count = prompt_u64("Enter transmission repetitions (0 for continuous loop, default 1)", 1, 0, UINT64_MAX);
     tx_opts.delay_ms = prompt_uint("Enter Inter-Packet Gap (IPG) / delay in milliseconds (0 for minimal IPG)", 0, 0, 60000);
 
     printf("Enable dry-run simulation mode? (1=Yes, 0=No) [0]: ");
@@ -424,15 +439,15 @@ static void edit_strm_interactive(strm_stream_t *stream) {
 
         if (choice == 1) {
             uint32_t entry_idx = prompt_uint("Select entry # to edit repetitions (0 for ALL entries)", 0, 0, (uint32_t)stream->count);
-            uint32_t reps = prompt_uint("Enter new repetition count", 1, 1, 1000000);
+            uint64_t reps = prompt_u64("Enter new repetition count", 1, 1, UINT64_MAX);
             if (entry_idx == 0) {
                 for (size_t i = 0; i < stream->count; i++) {
                     stream->entries[i].repetitions = reps;
                 }
-                printf("[+] Updated repetitions to %u for all %zu entries.\n", reps, stream->count);
+                printf("[+] Updated repetitions to %" PRIu64 " for all %zu entries.\n", reps, stream->count);
             } else {
                 stream->entries[entry_idx - 1].repetitions = reps;
-                printf("[+] Updated repetitions for entry #%u to %u.\n", entry_idx, reps);
+                printf("[+] Updated repetitions for entry #%u to %" PRIu64 ".\n", entry_idx, reps);
             }
         } else if (choice == 2) {
             uint32_t entry_idx = prompt_uint("Select entry # to edit delay (0 for ALL entries)", 0, 0, (uint32_t)stream->count);
@@ -730,7 +745,7 @@ int cli_run_args(int argc, char *argv[]) {
     char load_path[256] = "";
     char pcap_path[256] = "";
     char tx_ifname[256] = "";
-    uint32_t count = 1;
+    uint64_t count = 1;
     uint32_t delay_ms = 0;
     bool dry_run = false;
 
@@ -831,7 +846,7 @@ int cli_run_args(int argc, char *argv[]) {
                 }
                 break;
             }
-            case 'c': parse_uint(optarg, 0, 1000000, &count); break;
+            case 'c': parse_u64(optarg, 0, UINT64_MAX, &count); break;
             case 'w': parse_uint(optarg, 0, 60000, &delay_ms); break;
             case 'n': dry_run = true; break;
         }

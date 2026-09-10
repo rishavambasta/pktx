@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <inttypes.h>
 
 #define PKTX_MIN_PACKET_SIZE 64
 #define PKTX_MAX_PACKET_SIZE 1514
@@ -28,8 +29,11 @@ uint16_t compute_checksum(const void *data, size_t len);
 // Print formatted hex dump of buffer
 void print_hex_dump(const char *title, const uint8_t *data, size_t len);
 
-// Validate generic unsigned integer input string within [min, max]
+// Validate generic unsigned 32-bit integer input string within [min, max]
 bool parse_uint(const char *str, uint32_t min, uint32_t max, uint32_t *val_out);
+
+// Validate generic unsigned 64-bit integer input string within [min, max]
+bool parse_u64(const char *str, uint64_t min, uint64_t max, uint64_t *val_out);
 
 // Validate hex integer input string (e.g. 0x0800 or 0800) within [min, max]
 bool parse_hex16(const char *str, uint16_t *val_out);

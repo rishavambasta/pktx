@@ -51,6 +51,10 @@ static void test_utils(void) {
     char file2[64] = "my_stream.strm";
     ensure_strm_extension(file2, sizeof(file2));
     TEST_ASSERT(strcmp(file2, "my_stream.strm") == 0, "ensure_strm_extension preserve existing extension");
+
+    uint64_t val64;
+    TEST_ASSERT(parse_u64("10000000000", 0, UINT64_MAX, &val64) && val64 == 10000000000ULL, "parse_u64 64-bit count (10 Billion)");
+    TEST_ASSERT(parse_u64("18446744073709551615", 0, UINT64_MAX, &val64) && val64 == UINT64_MAX, "parse_u64 UINT64_MAX count");
 }
 
 static void test_payload(void) {
